@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.asynciterable",
+      "deno.ns"
+    ]
+  },
+  "imports": {
+    "vite": "npm:vite@^4.4.9",
+    "@preact/preset-vite": "npm:@preact/preset-vite@^2.5.0",
+    "preact": "npm:preact@^10.17.1",
+    "preact/hooks": "npm:preact@^10.17.1/hooks",
+    "preact/compat": "npm:preact@^10.17.1/compat",
+    "three": "npm:three@^0.157.0",
+    "three-stdlib": "npm:three-stdlib@^2.26.4",
+    "@types/three": "npm:@types/three@^0.157.0",
+    "@hono/hono": "jsr:@hono/hono@^4.6.3"
+  },
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "dev": "deno run -A npm:vite",
+    "fix": "deno fmt && deno lint --fix && deno check **/*.ts **/*.tsx",
+    "build": "deno run -A npm:vite build",
+    "preview": "deno run -A npm:vite preview"
+  },
+  "exclude": ["node_modules"]
+}
