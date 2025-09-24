@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/deno";
 import { proxy } from "hono/proxy";
-import { renderToString } from "react-dom/server";
 import { streamSSE } from "hono/streaming";
 
 type ChangeKind = "create" | "modify" | "remove";
@@ -76,22 +75,20 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-// SSR ルート
+// SSR ルート  
 app.get("/", (c) => {
   const params = new URLSearchParams(c.req.url.split("?")[1] || "");
-  const serverUrl = `http://localhost:${PORT}`;
   const entry = params.get("entry") || "main.scad";
 
   try {
-    const appProps = { serverUrl, entry };
-    return c.html(renderToString(
-      <html>
-        <head>
-          <meta charSet="utf-8" />
-          <title>OpenSCAD WASM Preview</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <style>
-            {`
+    const appProps = { entry };
+    const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenSCAD WASM Preview</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
       html, body, #app {
         height: 100%;
         margin: 0;
@@ -117,36 +114,33 @@ app.get("/", (c) => {
       .warn {
         color: #f59e0b;
       }
-    `}
-          </style>
-          {import.meta.env.PROD
-            ? <script type="module" src="/static/main.js"></script>
-            : <script type="module" src="/frontend/main.tsx"></script>}
-        </head>
-        <body>
-          <div id="app">
-            <div style="display:flex;flex-direction:column;height:100vh;width:100vw;">
-              <header>
-                <strong>OpenSCAD Preview</strong>
-                <span style="color:#aaa;margin-left:10px">Entry: {entry}</span>
-                <span class="warn" style="margin-left:10px">Loading...</span>
-              </header>
-              <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center;">
-                <div style="color:#aaa;">
-                  Loading OpenSCAD Preview...
-                </div>
-              </div>
-            </div>
+    </style>
+    ${import.meta.env.PROD
+      ? '<script type="module" src="/static/main.js"></script>'
+      : '<script type="module" src="/frontend/main.tsx"></script>'}
+  </head>
+  <body>
+    <div id="app">
+      <div style="display:flex;flex-direction:column;height:100vh;width:100vw;">
+        <header>
+          <strong>OpenSCAD Preview</strong>
+          <span style="color:#aaa;margin-left:10px">Entry: ${entry}</span>
+          <span class="warn" style="margin-left:10px">Loading...</span>
+        </header>
+        <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center;">
+          <div style="color:#aaa;">
+            Loading OpenSCAD Preview...
           </div>
-          <script
-            type="application/json"
-            id="app-props"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(appProps) }}
-          >
-          </script>
-        </body>
-      </html>,
-    ));
+        </div>
+      </div>
+    </div>
+    <script type="application/json" id="app-props">
+      ${JSON.stringify(appProps)}
+    </script>
+  </body>
+</html>`;
+    
+    return c.html(html);
   } catch (error) {
     console.error("SSR Error:", error);
     return c.text("Internal Server Error", 500);
@@ -197,6 +191,15 @@ app.get("/list", async (c) => {
   }
   return c.json({ root: ROOT, files: results });
 });
+
+// 静的ファイル配信 (本番用)
+app.use(
+  "/static/*",
+  serveStatic({
+    root: "./dist",
+    rewriteRequestPath: (path) => path.replace(/^\/static/, "/static"),
+  }),
+);
 
 // 単一ファイル取得（テキスト/バイナリ両対応）
 app.use(

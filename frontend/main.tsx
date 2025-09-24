@@ -1,4 +1,5 @@
-import { hydrateRoot } from "react-dom/client";
+import React from "react";
+import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 
 // サーバーサイドからのpropsを取得
@@ -9,4 +10,7 @@ const params = new URLSearchParams(location.search);
 const entry = props.entry || params.get("entry") || "main.scad";
 
 const container = document.getElementById("app")!;
-hydrateRoot(container, <App entry={entry} />);
+// Clear existing content and render
+container.innerHTML = '';
+const root = createRoot(container);
+root.render(<App entry={entry} />);

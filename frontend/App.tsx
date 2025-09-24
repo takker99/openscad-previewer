@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChangeStream, type FileChange } from "./changeStream.ts";
 import { OpenScadEngine } from "./openscadEngine.ts";
 import { StlCanvas } from "./StlCanvas.tsx";
@@ -14,8 +14,14 @@ export function App({ entry }: AppProps) {
   const [timeMs, setTimeMs] = useState<number | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [stlData, setStlData] = useState<Uint8Array | undefined>(undefined);
+  const [isClient, setIsClient] = useState(false);
 
   const engine = useMemo(() => new OpenScadEngine(), []);
+
+  // Detect client-side rendering
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const compile = () => {
     setError(undefined);
@@ -86,7 +92,35 @@ export function App({ entry }: AppProps) {
         )}
       </header>
       <div style={{flex: 1, minHeight: 0}}>
-        <StlCanvas stlData={stlData} error={error} />
+        {isClient ? (
+          <React.Suspense fallback={
+            <div style={{ 
+              width: "100%", 
+              height: "100%", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              background: "#1a1a1a", 
+              color: "#aaa" 
+            }}>
+              Loading 3D Viewer...
+            </div>
+          }>
+            <StlCanvas stlData={stlData} error={error} />
+          </React.Suspense>
+        ) : (
+          <div style={{ 
+            width: "100%", 
+            height: "100%", 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center", 
+            background: "#1a1a1a", 
+            color: "#aaa" 
+          }}>
+            Loading OpenSCAD Preview...
+          </div>
+        )}
       </div>
     </div>
   );
