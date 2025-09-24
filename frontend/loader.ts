@@ -1,4 +1,4 @@
-import type { EmscriptenModule } from "./emscripten.d.ts";
+import type { EmscriptenModule } from "./openscad-wasm.d.ts";
 
 // openscad.js を <script> で読み込み、Emscripten Module factory を取得する共通ローダ
 // - jsUrl: openscad.js の完全URL（remote or local）

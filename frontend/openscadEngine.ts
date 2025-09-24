@@ -1,4 +1,4 @@
-import type { EmscriptenModule } from "./emscripten.d.ts";
+import type { EmscriptenModule } from "./openscad-wasm.d.ts";
 import { loadOpenScadFactoryViaScript } from "./loader.ts";
 
 export type CompileResult =
