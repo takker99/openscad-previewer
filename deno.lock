@@ -1,19 +1,17 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@hono/hono@^4.6.3": "4.9.8",
+    "npm:@hono/vite-build@^1.7.0": "1.7.0_hono@4.9.8",
+    "npm:@hono/vite-dev-server@~0.18.1": "0.18.3_hono@4.9.8",
     "npm:@preact/preset-vite@^2.5.0": "2.10.2_@babel+core@7.28.4_vite@4.5.14_preact@10.27.0",
     "npm:@types/three@0.157": "0.157.2",
+    "npm:hono@^4.6.3": "4.9.8",
+    "npm:preact-render-to-string@^6.6.1": "6.6.1_preact@10.27.0",
     "npm:preact@^10.17.1": "10.27.0",
     "npm:three-stdlib@^2.26.4": "2.36.0_three@0.157.0",
     "npm:three@0.157": "0.157.0",
     "npm:vite@*": "4.5.14",
     "npm:vite@^4.4.9": "4.5.14"
-  },
-  "jsr": {
-    "@hono/hono@4.9.8": {
-      "integrity": "908150f13e90181a051a3af3bf15203aff00190682afedfd38824d0cb9299a95"
-    }
   },
   "npm": {
     "@babel/code-frame@7.27.1": {
@@ -280,6 +278,26 @@
       "os": ["win32"],
       "cpu": ["x64"]
     },
+    "@hono/node-server@1.19.4_hono@4.9.8": {
+      "integrity": "sha512-AWKQZ/YkHUBSHeL/5Ld8FWgUs6wFf4TxGYxqp9wLZxRdFuHBpXmgOq+CuDoL4vllkZLzovCf5HBJnypiy3EtHA==",
+      "dependencies": [
+        "hono"
+      ]
+    },
+    "@hono/vite-build@1.7.0_hono@4.9.8": {
+      "integrity": "sha512-L73WBed5teC7DHTzXYkho83POYYluD2rTkbT76FJuqpfXPgTW/PsbIa8O0YcCETE3VUoh584fe6vuLAM5ctjww==",
+      "dependencies": [
+        "hono"
+      ]
+    },
+    "@hono/vite-dev-server@0.18.3_hono@4.9.8": {
+      "integrity": "sha512-JztypLmq6qtQ3OAcz5vDzwXYBBymLztSbfDuNf4XTWkfppLjf6DHvYHtQZ5idOfNhUzdnbYY7/6QAKlVk6G3QQ==",
+      "dependencies": [
+        "@hono/node-server",
+        "hono",
+        "minimatch"
+      ]
+    },
     "@jridgewell/gen-mapping@0.3.13": {
       "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
       "dependencies": [
@@ -380,12 +398,21 @@
         "@babel/core"
       ]
     },
+    "balanced-match@1.0.2": {
+      "integrity": "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="
+    },
     "baseline-browser-mapping@2.8.6": {
       "integrity": "sha512-wrH5NNqren/QMtKUEEJf7z86YjfqW/2uw3IL3/xpqZUC95SSVIFXYQeeGjL6FT/X68IROu6RMehZQS5foy2BXw==",
       "bin": true
     },
     "boolbase@1.0.0": {
       "integrity": "sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww=="
+    },
+    "brace-expansion@2.0.2": {
+      "integrity": "sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ==",
+      "dependencies": [
+        "balanced-match"
+      ]
     },
     "browserslist@4.26.2": {
       "integrity": "sha512-ECFzp6uFOSB+dcZ5BK/IBaGWssbSYBHvuMeMt3MMFyhI0Z8SqGgEkBLARgpRH3hutIgPVsALcMwbDrJqPxQ65A==",
@@ -507,6 +534,9 @@
       "integrity": "sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==",
       "bin": true
     },
+    "hono@4.9.8": {
+      "integrity": "sha512-JW8Bb4RFWD9iOKxg5PbUarBYGM99IcxFl2FPBo2gSJO11jjUDqlP1Bmfyqt8Z/dGhIQ63PMA9LdcLefXyIasyg=="
+    },
     "js-tokens@4.0.0": {
       "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="
     },
@@ -535,6 +565,12 @@
     },
     "meshoptimizer@0.18.1": {
       "integrity": "sha512-ZhoIoL7TNV4s5B6+rx5mC//fw8/POGyNxS/DZyCJeiZ12ScLfVwRE/GfsxwiTkMYYD5DmK2/JXnEVXqL4rF+Sw=="
+    },
+    "minimatch@9.0.5": {
+      "integrity": "sha512-G6T0ZX48xgozx7587koeX9Ys2NYy6Gmv//P89sEte9V9whIapMNF4idKxnW2QtCcLiTWlb/wfCabAtAFWhhBow==",
+      "dependencies": [
+        "brace-expansion"
+      ]
     },
     "ms@2.1.3": {
       "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="
@@ -575,6 +611,12 @@
     },
     "potpack@1.0.2": {
       "integrity": "sha512-choctRBIV9EMT9WGAZHn3V7t0Z2pMQyl0EZE6pFc/6ml3ssw7Dlf/oAOvFwjm1HVsqfQN8GfeFyJ+d8tRzqueQ=="
+    },
+    "preact-render-to-string@6.6.1_preact@10.27.0": {
+      "integrity": "sha512-IIMfXRjmbSP9QmG18WJLQa4Z4yx3J0VC9QN5q9z2XYlWSzFlJ+bSm/AyLyyV/YFwjof1OXFX2Mz6Ao60LXudJg==",
+      "dependencies": [
+        "preact"
+      ]
     },
     "preact@10.27.0": {
       "integrity": "sha512-/DTYoB6mwwgPytiqQTh/7SFRL98ZdiD8Sk8zIUVOxtwq4oWcwrcd1uno9fE/zZmUaUrFNYzbH14CPebOz9tZQw=="
@@ -659,9 +701,12 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@hono/hono@^4.6.3",
+      "npm:@hono/vite-build@^1.7.0",
+      "npm:@hono/vite-dev-server@~0.18.1",
       "npm:@preact/preset-vite@^2.5.0",
       "npm:@types/three@0.157",
+      "npm:hono@^4.6.3",
+      "npm:preact-render-to-string@^6.6.1",
       "npm:preact@^10.17.1",
       "npm:three-stdlib@^2.26.4",
       "npm:three@0.157",

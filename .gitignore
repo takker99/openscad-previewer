@@ -143,3 +143,4 @@ vite.config.ts.timestamp-*
 test-server.js
 package.json
 package-lock.json
+public

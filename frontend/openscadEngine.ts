@@ -1,13 +1,12 @@
 import type { EmscriptenModule } from "./openscad-wasm.d.ts";
-import { loadOpenScadFactoryViaScript } from "./loader.ts";
 
 export type CompileResult =
   | { ok: true; timeMs: number; stl: Uint8Array; warnings?: string[] }
   | { ok: false; timeMs?: number; errors: string[]; warnings?: string[] };
 
 type InitOptions = {
-  // ローカル配置（server/openscad）のベースURL
-  localBaseUrl?: string;
+  // ローカル配置（server/openscad）のベースURL またはリモートURL
+  baseUrl?: string;
 };
 
 export class OpenScadEngine {
@@ -18,43 +17,46 @@ export class OpenScadEngine {
   private workspace = "/workspace";
   private outdir = "/out";
   private outFile = `${this.outdir}/model.stl`;
-  private localBaseUrl: string;
+  private baseUrl: string;
 
   constructor(opts?: InitOptions) {
-    this.localBaseUrl = opts?.localBaseUrl ?? "/openscad";
+    this.baseUrl = opts?.baseUrl ?? "/openscad";
   }
 
   init(): Promise<void> {
     if (this.readyPromise) return this.readyPromise;
     this.readyPromise = (async () => {
-      const jsUrl = `${this.localBaseUrl.replace(/\/+$/, "")}/openscad.js`;
-      const wasmUrl = `${this.localBaseUrl.replace(/\/+$/, "")}/openscad.wasm`;
-
-      let factory:
-        | ((overrides?: Partial<EmscriptenModule>) => Promise<EmscriptenModule>)
-        | null = null;
+      const jsUrl = `${this.baseUrl.replace(/\/+$/, "")}/openscad.js`;
 
       try {
-        factory = await loadOpenScadFactoryViaScript(jsUrl, wasmUrl);
+        // ES6モジュールとして動的にインポート
+        const openscadModule = await import(/* @vite-ignore */ jsUrl);
+        const OpenSCAD = openscadModule.default;
+
+        if (typeof OpenSCAD !== "function") {
+          throw new Error("OpenSCAD default export is not a function");
+        }
+
+        // OpenSCAD WASM インスタンスを初期化
+        this.mod = await OpenSCAD({
+          noInitialRun: true,
+          print: (...args: string[]) => this.stdout.push(args.join(" ")),
+          printErr: (...args: string[]) => this.stderr.push(args.join(" ")),
+        });
+
+        // MEMFS 準備
+        try {
+          this.mod!.FS.mkdir(this.workspace);
+        } catch {
+          // Directory might already exist
+        }
+        try {
+          this.mod!.FS.mkdir(this.outdir);
+        } catch {
+          // Directory might already exist
+        }
       } catch (error) {
         throw new Error(`Failed to load OpenSCAD WASM: ${error}`);
-      }
-
-      this.mod = await factory({
-        print: (...args: string[]) => this.stdout.push(args.join(" ")),
-        printErr: (...args: string[]) => this.stderr.push(args.join(" ")),
-      });
-
-      // MEMFS 準備
-      try {
-        this.mod!.FS.mkdir(this.workspace);
-      } catch {
-        // Directory might already exist
-      }
-      try {
-        this.mod!.FS.mkdir(this.outdir);
-      } catch {
-        // Directory might already exist
       }
     })();
     return this.readyPromise;
@@ -64,12 +66,18 @@ export class OpenScadEngine {
     const r = await fetch(`${listEndpointBase}/list?ext=scad`);
     if (!r.ok) throw new Error(await r.text());
     const { files } = await r.json() as { files: { path: string }[] };
+    console.log(`Hydrating ${files.length} SCAD files:`, files);
+
     for (const f of files) {
       const u = `${fileEndpointBase}/file?path=${encodeURIComponent(f.path)}`;
       const res = await fetch(u, { cache: "no-store" });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.log(`Failed to fetch ${f.path}:`, res.status, res.statusText);
+        continue;
+      }
       const buf = new Uint8Array(await res.arrayBuffer());
       const wsPath = `/${this.workspace.replace(/^\//, "")}/${f.path}`;
+      console.log(`Writing file: ${f.path} -> ${wsPath} (${buf.length} bytes)`);
       this.ensureDirs(wsPath);
       this.mod!.FS.writeFile(wsPath, buf);
     }
@@ -81,11 +89,15 @@ export class OpenScadEngine {
     fileEndpointBase: string,
   ) {
     const wsPath = `/${this.workspace.replace(/^\//, "")}/${relPath}`;
+    console.log(`Applying change: ${kind} ${relPath} -> ${wsPath}`);
+
     if (kind === "remove") {
       try {
         this.mod!.FS.unlink(wsPath);
+        console.log(`Removed file: ${wsPath}`);
       } catch {
         // File might not exist
+        console.log(`Failed to remove file (might not exist): ${wsPath}`);
       }
       return;
     }
@@ -93,10 +105,16 @@ export class OpenScadEngine {
       `${fileEndpointBase}/file?path=${encodeURIComponent(relPath)}`,
       { cache: "no-store" },
     );
-    if (!r.ok) return;
+    if (!r.ok) {
+      console.log(`Failed to fetch ${relPath}:`, r.status, r.statusText);
+      return;
+    }
     const buf = new Uint8Array(await r.arrayBuffer());
     this.ensureDirs(wsPath);
     this.mod!.FS.writeFile(wsPath, buf);
+    console.log(
+      `Applied change: ${kind} ${relPath} -> ${wsPath} (${buf.length} bytes)`,
+    );
   }
 
   compile(entry: string): CompileResult {
@@ -109,7 +127,21 @@ export class OpenScadEngine {
       } catch {
         // File might not exist
       }
-      const entryPath = `${this.workspace}/${entry}`;
+
+      // DEBUG: FS内のファイル構造をコンソールに出力
+      this.debugFS();
+
+      // エントリファイルの実際のパスを探す
+      const entryPath = this.findEntryFile(entry);
+      if (!entryPath) {
+        return {
+          ok: false,
+          timeMs: performance.now() - start,
+          errors: [`Entry file '${entry}' not found in workspace`],
+        };
+      }
+
+      console.log(`Attempting to compile: ${entryPath}`);
       const code = this.mod!.callMain(["-o", this.outFile, entryPath]);
       const timeMs = performance.now() - start;
       const errTxt = this.stderr.join("\n").trim();
@@ -149,5 +181,120 @@ export class OpenScadEngine {
         // Directory might already exist
       }
     }
+  }
+
+  private findEntryFile(entry: string): string | null {
+    if (!this.mod) return null;
+
+    // 候補パスを生成
+    const candidates = [
+      `${this.workspace}/${entry}`, // 直接指定（例: /workspace/main.scad）
+      `${this.workspace}/examples/${entry}`, // examples配下（例: /workspace/examples/main.scad）
+    ];
+
+    // FS内のすべての.scadファイルを再帰的に検索
+    const allScadFiles = this.findAllScadFiles(this.workspace);
+
+    // エントリファイル名（例: main.scad）と一致するファイルを探す
+    const matchingFiles = allScadFiles.filter((filePath) =>
+      filePath.endsWith(`/${entry}`) ||
+      filePath === `${this.workspace}/${entry}`
+    );
+
+    console.log(`Looking for entry file '${entry}':`, {
+      candidates,
+      allScadFiles,
+      matchingFiles,
+    });
+
+    // 最初に見つかったマッチするファイルを返す
+    if (matchingFiles.length > 0) {
+      return matchingFiles[0];
+    }
+
+    // 候補パスの中で存在するものを返す
+    for (const candidate of candidates) {
+      try {
+        this.mod.FS.stat(candidate);
+        return candidate;
+      } catch {
+        // ファイルが存在しない
+      }
+    }
+
+    return null;
+  }
+
+  private findAllScadFiles(dir: string): string[] {
+    if (!this.mod) return [];
+
+    const files: string[] = [];
+
+    try {
+      const items = this.mod.FS.readdir(dir);
+
+      for (const item of items) {
+        if (item === "." || item === "..") continue;
+
+        const fullPath = `${dir}/${item}`;
+
+        try {
+          const stat = this.mod.FS.stat(fullPath);
+
+          // ディレクトリの場合は再帰的に探索
+          if (stat.size === 4096) { // ディレクトリのサイズは通常4096
+            files.push(...this.findAllScadFiles(fullPath));
+          } // .scadファイルの場合はリストに追加
+          else if (item.endsWith(".scad")) {
+            files.push(fullPath);
+          }
+        } catch {
+          // stat エラーの場合はスキップ
+        }
+      }
+    } catch {
+      // readdir エラーの場合はスキップ
+    }
+
+    return files;
+  }
+
+  private debugFS() {
+    if (!this.mod) {
+      console.log("FS Debug: Module not initialized");
+      return;
+    }
+
+    console.log("=== FS Debug ===");
+
+    // ルートディレクトリの内容を確認
+    try {
+      const rootFiles = this.mod.FS.readdir("/");
+      console.log("Root directory contents:", rootFiles);
+    } catch (e) {
+      console.log("Error reading root directory:", e);
+    }
+
+    // workspaceディレクトリの内容を確認
+    try {
+      const workspaceFiles = this.mod.FS.readdir(this.workspace);
+      console.log(`${this.workspace} directory contents:`, workspaceFiles);
+
+      // 各ファイルの詳細情報を確認
+      for (const file of workspaceFiles) {
+        if (file === "." || file === "..") continue;
+        const filePath = `${this.workspace}/${file}`;
+        try {
+          const stat = this.mod.FS.stat(filePath);
+          console.log(`File: ${filePath}, Size: ${stat.size} bytes`);
+        } catch (e) {
+          console.log(`Error reading ${filePath}:`, e);
+        }
+      }
+    } catch (e) {
+      console.log(`Error reading ${this.workspace} directory:`, e);
+    }
+
+    console.log("=== End FS Debug ===");
   }
 }
