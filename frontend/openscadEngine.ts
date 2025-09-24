@@ -6,12 +6,8 @@ export type CompileResult =
   | { ok: false; timeMs?: number; errors: string[]; warnings?: string[] };
 
 type InitOptions = {
-  // ローカル配置（public/openscad）のベースURL。Vite なら "/openscad"
+  // ローカル配置（server/openscad）のベースURL
   localBaseUrl?: string;
-  // 公式配布元など、openscad.js/wasm が置かれているディレクトリURL（CORS対応必須）
-  remoteBaseUrl?: string;
-  // true の場合は remoteBaseUrl を優先し、失敗したら local にフォールバック
-  preferRemote?: boolean;
 };
 
 export class OpenScadEngine {
@@ -22,50 +18,26 @@ export class OpenScadEngine {
   private workspace = "/workspace";
   private outdir = "/out";
   private outFile = `${this.outdir}/model.stl`;
-  private initOpts: Required<InitOptions>;
+  private localBaseUrl: string;
 
   constructor(opts?: InitOptions) {
-    this.initOpts = {
-      localBaseUrl: opts?.localBaseUrl ?? "/openscad",
-      remoteBaseUrl: opts?.remoteBaseUrl ?? "",
-      preferRemote: opts?.preferRemote ?? false,
-    };
+    this.localBaseUrl = opts?.localBaseUrl ?? "/openscad";
   }
 
   init(): Promise<void> {
     if (this.readyPromise) return this.readyPromise;
     this.readyPromise = (async () => {
-      // 1) ローダURLを決定
-      const tryPaths = [];
-      if (this.initOpts.preferRemote && this.initOpts.remoteBaseUrl) {
-        tryPaths.push({
-          js: `${this.initOpts.remoteBaseUrl.replace(/\/+$/, "")}/openscad.js`,
-          wasm: `${
-            this.initOpts.remoteBaseUrl.replace(/\/+$/, "")
-          }/openscad.wasm`,
-        });
-      }
-      // ローカル（public配下）
-      tryPaths.push({
-        js: `${this.initOpts.localBaseUrl.replace(/\/+$/, "")}/openscad.js`,
-        wasm: `${this.initOpts.localBaseUrl.replace(/\/+$/, "")}/openscad.wasm`,
-      });
+      const jsUrl = `${this.localBaseUrl.replace(/\/+$/, "")}/openscad.js`;
+      const wasmUrl = `${this.localBaseUrl.replace(/\/+$/, "")}/openscad.wasm`;
 
       let factory:
         | ((overrides?: Partial<EmscriptenModule>) => Promise<EmscriptenModule>)
         | null = null;
-      let lastErr: unknown = null;
-      for (const p of tryPaths) {
-        try {
-          factory = await loadOpenScadFactoryViaScript(p.js, p.wasm);
-          break;
-        } catch (e) {
-          lastErr = e;
-          console.warn("OpenSCAD load failed for", p, e);
-        }
-      }
-      if (!factory) {
-        throw lastErr ?? new Error("Failed to load OpenSCAD factory");
+
+      try {
+        factory = await loadOpenScadFactoryViaScript(jsUrl, wasmUrl);
+      } catch (error) {
+        throw new Error(`Failed to load OpenSCAD WASM: ${error}`);
       }
 
       this.mod = await factory({

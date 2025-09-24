@@ -6,8 +6,111 @@ import { cors } from "@hono/hono/cors";
 type ChangeKind = "create" | "modify" | "remove";
 type FileChange = { path: string; kind: ChangeKind };
 
-const ROOT = Deno.args[0] ?? Deno.cwd(); // 監視するプロジェクトルート（WSL内のパス推奨）
+// CLI引数の解析
+function parseArgs() {
+  const args = Deno.args;
+  let root = Deno.cwd();
+  let version = "latest";
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--version" || arg === "-v") {
+      version = args[++i] || "latest";
+    } else if (arg === "--help" || arg === "-h") {
+      console.log(`
+Usage: deno run -A server.ts [directory] [options]
+
+Arguments:
+  [directory]     Directory to watch (default: current directory)
+
+Options:
+  --version, -v   OpenSCAD WASM version to download (default: latest)
+  --help, -h      Show this help message
+
+Examples:
+  deno run -A server.ts
+  deno run -A server.ts ./examples
+  deno run -A server.ts ./examples --version v2023.12.03
+      `);
+      Deno.exit(0);
+    } else if (!arg.startsWith("--")) {
+      root = arg;
+    }
+  }
+
+  return { root, version };
+}
+
+const { root: ROOT, version: OPENSCAD_VERSION } = parseArgs();
 const PORT = Number(Deno.env.get("PORT") ?? 8787);
+
+// OpenSCAD WASM ダウンロード機能
+async function downloadOpenSCADWASM(version: string = "latest") {
+  const publicDir = "./public/openscad";
+
+  try {
+    await Deno.mkdir(publicDir, { recursive: true });
+  } catch {
+    // Directory already exists
+  }
+
+  let downloadVersion = version;
+  if (version === "latest") {
+    try {
+      console.log("Fetching latest OpenSCAD WASM release...");
+      const response = await fetch(
+        "https://api.github.com/repos/openscad/openscad/releases/latest",
+      );
+      const data = await response.json();
+      downloadVersion = data.tag_name;
+      console.log(`Latest version: ${downloadVersion}`);
+    } catch (error) {
+      console.warn("Could not fetch latest version, using fallback", error);
+      downloadVersion = "v2023.12.03"; // fallback version
+    }
+  }
+
+  const baseUrl =
+    `https://github.com/openscad/openscad/releases/download/${downloadVersion}`;
+  const files = [
+    { name: "openscad.js", url: `${baseUrl}/openscad.js` },
+    { name: "openscad.wasm", url: `${baseUrl}/openscad.wasm` },
+  ];
+
+  console.log(`Downloading OpenSCAD WASM ${downloadVersion}...`);
+
+  for (const file of files) {
+    const filePath = `${publicDir}/${file.name}`;
+
+    // Check if file already exists
+    try {
+      await Deno.stat(filePath);
+      console.log(`${file.name} already exists, skipping download`);
+      continue;
+    } catch {
+      // File doesn't exist, proceed with download
+    }
+
+    try {
+      console.log(`Downloading ${file.name}...`);
+      const response = await fetch(file.url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.arrayBuffer();
+      await Deno.writeFile(filePath, new Uint8Array(data));
+      console.log(`✓ Downloaded ${file.name} (${data.byteLength} bytes)`);
+    } catch (error) {
+      console.error(`Failed to download ${file.name}:`, error);
+      // Create a placeholder file to prevent repeated failures
+      await Deno.writeTextFile(
+        filePath,
+        `// Placeholder for ${file.name} - download failed\n`,
+      );
+    }
+  }
+}
 
 const app = new Hono();
 
@@ -40,6 +143,29 @@ app.get("/public/*", async (c) => {
     return new Response(f.readable);
   } catch {
     return c.notFound();
+  }
+});
+
+// OpenSCAD WASM ファイル配信
+app.get("/openscad/*", async (c) => {
+  const filename = c.req.path.replace(/^\/openscad\//, "");
+  const filePath = `./public/openscad/${filename}`;
+
+  try {
+    const data = await Deno.readFile(filePath);
+    const headers = new Headers();
+
+    if (filename.endsWith(".js")) {
+      headers.set("Content-Type", "text/javascript");
+    } else if (filename.endsWith(".wasm")) {
+      headers.set("Content-Type", "application/wasm");
+    } else {
+      headers.set("Content-Type", "application/octet-stream");
+    }
+
+    return new Response(data, { headers });
+  } catch (e) {
+    return c.text(`OpenSCAD file not found: ${String(e)}`, 404);
   }
 });
 
@@ -82,16 +208,13 @@ app.get("/file", async (c) => {
 });
 
 // SSE イベントストリーム
-const clients = new Set<WritableStreamDefaultWriter<string>>();
+const clients = new Set<ReadableStreamDefaultController<string>>();
 app.get("/events", (c) => {
   const stream = new ReadableStream<string>({
     start(controller) {
-      const writer = controller as unknown as WritableStreamDefaultWriter<
-        string
-      >;
-      clients.add(writer);
+      clients.add(controller);
       // 初回に ping を送る
-      writer.write("event: ping\ndata: {}\n\n");
+      controller.enqueue("event: ping\ndata: {}\n\n");
     },
     cancel() {
       // no-op
@@ -104,39 +227,48 @@ app.get("/events", (c) => {
 });
 
 // サーバ起動とファイル監視
-console.log(`Server on http://localhost:${PORT} watching ${ROOT}`);
+console.log(`Server starting on http://localhost:${PORT} watching ${ROOT}`);
 
-// ファイル監視を非同期で開始
+// OpenSCAD WASM をダウンロードしてからサーバを起動
 (async () => {
-  const debounce = new Map<string, number>();
-  for await (const ev of Deno.watchFs(ROOT, { recursive: true })) {
-    const kind = mapKind(ev.kind);
-    if (!kind) continue;
-    for (const p of ev.paths) {
-      const rel = p.startsWith(ROOT)
-        ? p.substring(ROOT.length + 1).replaceAll("\\", "/")
-        : p;
-      const key = `${kind}:${rel}`;
-      clearTimeout(debounce.get(key));
-      debounce.set(
-        key,
-        setTimeout(() => {
-          broadcast({ path: rel, kind });
-        }, 30) as unknown as number,
-      );
-    }
-  }
-})();
+  await downloadOpenSCADWASM(OPENSCAD_VERSION);
 
-// サーバを起動
-Deno.serve({ port: PORT }, app.fetch);
+  console.log(`✓ Server ready on http://localhost:${PORT}`);
+
+  // ファイル監視を非同期で開始
+  (async () => {
+    const debounce = new Map<string, number>();
+    for await (const ev of Deno.watchFs(ROOT, { recursive: true })) {
+      const kind = mapKind(ev.kind);
+      if (!kind) continue;
+      for (const p of ev.paths) {
+        const rel = p.startsWith(ROOT)
+          ? p.substring(ROOT.length + 1).replaceAll("\\", "/")
+          : p;
+        const key = `${kind}:${rel}`;
+        clearTimeout(debounce.get(key));
+        debounce.set(
+          key,
+          setTimeout(() => {
+            broadcast({ path: rel, kind });
+          }, 30) as unknown as number,
+        );
+      }
+    }
+  })();
+
+  // サーバを起動
+  Deno.serve({ port: PORT }, app.fetch);
+})();
 
 function broadcast(msg: FileChange) {
   const data = `event: change\ndata: ${JSON.stringify(msg)}\n\n`;
-  for (const w of clients) {
-    w.write(data).catch(() => {
-      clients.delete(w);
-    });
+  for (const controller of clients) {
+    try {
+      controller.enqueue(data);
+    } catch {
+      clients.delete(controller);
+    }
   }
 }
 

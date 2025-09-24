@@ -9,8 +9,6 @@ function App() {
   const params = new URLSearchParams(location.search);
   const serverUrl = params.get("server") ?? "http://localhost:8787";
   const entry = params.get("entry") ?? "main.scad";
-  // remoteBase を指定したら、ブラウザがそのURLから openscad.js/wasm を直接取得（失敗時はローカルへフォールバック）
-  const remoteBaseUrl = params.get("remoteBase") || undefined;
 
   const statusRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,10 +17,8 @@ function App() {
 
   const engine = useMemo(() =>
     new OpenScadEngine({
-      localBaseUrl: "/openscad",
-      remoteBaseUrl,
-      preferRemote: !!remoteBaseUrl,
-    }), [remoteBaseUrl]);
+      localBaseUrl: `${serverUrl}/openscad`,
+    }), [serverUrl]);
 
   const viewer = useMemo(() => new StlViewer(), []);
 

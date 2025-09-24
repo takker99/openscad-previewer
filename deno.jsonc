@@ -20,7 +20,9 @@
   },
   "nodeModulesDir": "auto",
   "tasks": {
-    "dev": "deno run -A npm:vite",
+    "dev": "deno run -A --watch server.ts & deno run -A npm:vite & wait",
+    "server": "deno run -A --watch server.ts",
+    "client": "deno run -A npm:vite",
     "fix": "deno fmt && deno lint --fix && deno check **/*.ts **/*.tsx",
     "build": "deno run -A npm:vite build",
     "preview": "deno run -A npm:vite preview"
