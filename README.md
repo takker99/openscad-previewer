@@ -24,7 +24,7 @@ This app can load OpenSCAD WASM in two ways:
   the official host.
 - Example:
   ```
-  http://localhost:5173/?server=http://localhost:8787&entry=main.scad&remoteBase=https://example.com/openscad-wasm/2024-XX
+  http://localhost:5173/?entry=main.scad
   ```
 - Requirements:
   - The remote host must provide CORS headers (`Access-Control-Allow-Origin: *`

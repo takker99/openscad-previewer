@@ -69,7 +69,7 @@ export class OpenScadEngine {
     console.log(`Hydrating ${files.length} SCAD files:`, files);
 
     for (const f of files) {
-      const u = `${fileEndpointBase}/file?path=${encodeURIComponent(f.path)}`;
+      const u = `${fileEndpointBase}/file/${f.path}`;
       const res = await fetch(u, { cache: "no-store" });
       if (!res.ok) {
         console.log(`Failed to fetch ${f.path}:`, res.status, res.statusText);
@@ -102,7 +102,7 @@ export class OpenScadEngine {
       return;
     }
     const r = await fetch(
-      `${fileEndpointBase}/file?path=${encodeURIComponent(relPath)}`,
+      `${fileEndpointBase}/file/${relPath}`,
       { cache: "no-store" },
     );
     if (!r.ok) {

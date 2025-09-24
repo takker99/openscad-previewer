@@ -7,7 +7,7 @@ interface AppProps {
   entry: string;
 }
 
-const serverUrl = location.href.slice(0, -1);
+const serverUrl = new URL(location.pathname, location.href).href.slice(0, -1);
 
 export function App({ entry }: AppProps) {
   const statusRef = useRef<HTMLSpanElement>(null);

@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
+import { serveStatic } from "hono/deno";
+import { proxy } from "hono/proxy";
 import { renderToString } from "preact-render-to-string";
 import { streamSSE } from "hono/streaming";
 
 type ChangeKind = "create" | "modify" | "remove";
-type FileChange = { path: string; kind: ChangeKind };
 
 // CLI引数の解析
 function parseArgs() {
@@ -67,7 +68,6 @@ async function getOpenSCADVersion(version: string = "latest"): Promise<string> {
 
 const app = new Hono();
 
-// ロガーミドルウェアを追加
 app.use("*", logger());
 
 app.use("*", async (c, next) => {
@@ -154,42 +154,25 @@ app.get("/", (c) => {
 });
 
 // OpenSCAD WASM ファイルプロキシ
-app.get("/openscad/*", async (c) => {
-  const filename = c.req.path.replace(/^\/openscad\//, "");
-  const downloadVersion = await getOpenSCADVersion(OPENSCAD_VERSION);
-  const baseUrl =
-    `https://github.com/openscad/openscad-wasm/releases/download/${downloadVersion}`;
-  const targetUrl = `${baseUrl}/${filename}`;
-
-  try {
-    console.log(`Proxying OpenSCAD file: ${targetUrl}`);
-    const response = await fetch(targetUrl);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.arrayBuffer();
-    const headers = new Headers();
-
-    if (filename.endsWith(".js")) {
-      headers.set("Content-Type", "text/javascript");
-    } else if (filename.endsWith(".wasm")) {
-      headers.set("Content-Type", "application/wasm");
-    } else {
-      headers.set("Content-Type", "application/octet-stream");
-    }
-
-    // CORS ヘッダーを追加
-    headers.set("Access-Control-Allow-Origin", "*");
-    headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-    headers.set("Access-Control-Allow-Headers", "Content-Type");
-
-    return new Response(data, { headers });
-  } catch (error) {
-    console.error(`Failed to proxy OpenSCAD file ${filename}:`, error);
-    return c.text(`OpenSCAD file proxy failed: ${String(error)}`, 502);
-  }
+app.get("/openscad/:path{.+}", async (c) => {
+  const tag = await getOpenSCADVersion(OPENSCAD_VERSION);
+  const path = c.req.param("path");
+  const contentType = path.endsWith(".wasm")
+    ? "application/wasm"
+    : path.endsWith(".js")
+    ? "text/javascript"
+    : "application/octet-stream";
+  const res = await proxy(
+    `https://github.com/openscad/openscad-wasm/releases/download/${tag}/${
+      c.req.param("path")
+    }`,
+    {
+      headers: c.req.header(),
+    },
+  );
+  res.headers.delete("Set-Cookie");
+  res.headers.set("Content-Type", contentType);
+  return res;
 });
 
 // ファイル一覧（初期同期用）
@@ -216,23 +199,17 @@ app.get("/list", async (c) => {
 });
 
 // 単一ファイル取得（テキスト/バイナリ両対応）
-app.get("/file", async (c) => {
-  const rel = c.req.query("path");
-  if (!rel) return c.text("Missing path", 400);
-  const fsPath = normalizeJoin(ROOT, rel);
-  try {
-    const data = await Deno.readFile(fsPath);
-    const headers = new Headers();
-    headers.set("Content-Type", "application/octet-stream");
-    return new Response(data, { headers });
-  } catch (e) {
-    return c.text(String(e), 404);
-  }
-});
+app.use(
+  "/file/*",
+  serveStatic({
+    root: "./",
+    rewriteRequestPath: (path) => path.replace(/^\/file/, ""),
+  }),
+);
 
 // SSE イベントストリーム (streamSSE使用)
-app.get("/events", (c) => {
-  return streamSSE(c, async (stream) => {
+app.get("/events", (c) =>
+  streamSSE(c, async (stream) => {
     // 初回に ping を送る
     await stream.writeSSE({
       event: "ping",
@@ -272,8 +249,7 @@ app.get("/events", (c) => {
     } catch (error) {
       console.error("File watching error:", error);
     }
-  });
-});
+  }));
 
 export default app;
 
@@ -282,15 +258,6 @@ function mapKind(k: Deno.FsEvent["kind"]): ChangeKind | null {
   if (k === "modify") return "modify";
   if (k === "remove") return "remove";
   return null;
-}
-
-function normalizeJoin(root: string, rel: string) {
-  const u = new URL(
-    `file://${root.replaceAll("\\", "/").replace(/\/+$/, "")}/${
-      rel.replace(/^\/+/, "")
-    }`,
-  );
-  return u.pathname;
 }
 
 async function* walk(
