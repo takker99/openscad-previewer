@@ -19,7 +19,7 @@
     でファイル提供。
   - 重要: サーバは OpenSCAD WASM（openscad.js /
     openscad.wasm）を配布・プロキシしない。
-- フロント（Preact + Three.js）
+- フロント（React + react-three-fiber）
   - OpenSCAD WASM
     は「ブラウザが外部の公式配布元（またはユーザ指定のホスト）から直接ロード」する。
     - 方式: `<script>` 注入 + `Module.locateFile` を用いて `openscad.js` と
@@ -30,7 +30,7 @@
   - 初回に `.scad` を MEMFS `/workspace` に同期、変更時は差分反映。
   - `callMain(["-o", "/out/model.stl", "/workspace/<entry>"])` で STL
     生成して描画。
-  - STL ビューアは Three.js 実装（OrbitControls、ライト、カメラフィット等）。
+  - STL ビューアは react-three-fiber + @react-three/drei 実装（CameraControls、Grid、GizmoHelper等）。
 
 WASM ロード方針
 
@@ -61,8 +61,8 @@ WASM ロード方針
   - loader.ts … openscad.js を `<script>` でロードし factory を得るローダ
   - openscadEngine.ts … MEMFS 同期 + `callMain` 実行
   - openscad-wasm.d.ts（上流の d.ts を配置して参照）
-  - stlViewer.ts … Three.js による STL ビューア
-  - main.tsx … Preact エントリ
+  - StlCanvas.tsx … react-three-fiber による STL ビューア
+  - main.tsx … React エントリ
 - vite.config.ts, tsconfig.json … Vite/TS 設定
 
 起動（開発）
@@ -111,9 +111,9 @@ WASM ロード方針
      として追加（ライセンス/著作権表記を保持）。
    - tsconfig の `typeRoots` または `include` で参照。自前の最小 d.ts
      は置換する。
-4. STL ビューア（Three.js）実装
-   - `stlViewer.ts` を Three.js
-     実装に置換（OrbitControls、ライト、カメラフィット、リサイズ対応、メッシュ差し替え）。
+4. STL ビューア（react-three-fiber）実装
+   - `StlCanvas.tsx` を react-three-fiber
+     実装に置換（CameraControls、Grid、GizmoHelper、Environment等）。
 5. ドキュメント/開発体験
    - `README.md` に remoteBase の使い方、CORS/MIME
      の要件、ローカルフォールバック手順、WSL 注意点を追記。
