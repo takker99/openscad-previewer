@@ -22,14 +22,14 @@ export class StlViewer {
       cancelAnimationFrame(this.animationId);
       this.animationId = undefined;
     }
-    
+
     this.controls?.dispose();
     this.renderer?.dispose();
-    
+
     if (this.root) {
       this.root.innerHTML = "";
     }
-    
+
     this.root = undefined;
     this.scene = undefined;
     this.camera = undefined;
@@ -41,12 +41,14 @@ export class StlViewer {
   render(stlData: Uint8Array) {
     if (!this.scene || !this.camera || !this.renderer) return;
 
+    console.log("STL viewer render called with data size:", stlData.length);
+
     // Remove existing mesh
     if (this.currentMesh) {
       this.scene.remove(this.currentMesh);
       this.currentMesh.geometry.dispose();
       if (Array.isArray(this.currentMesh.material)) {
-        this.currentMesh.material.forEach(m => m.dispose());
+        this.currentMesh.material.forEach((m) => m.dispose());
       } else {
         this.currentMesh.material.dispose();
       }
@@ -56,31 +58,43 @@ export class StlViewer {
       // Create blob URL for STL data
       const blob = new Blob([stlData], { type: "model/stl" });
       const url = URL.createObjectURL(blob);
+      console.log("Created blob URL:", url);
 
       const loader = new STLLoader();
-      loader.load(url, (geometry) => {
-        // Clean up blob URL
-        URL.revokeObjectURL(url);
+      loader.load(
+        url,
+        (geometry) => {
+          console.log(
+            "STL loaded successfully, triangles:",
+            geometry.attributes.position.count / 3,
+          );
 
-        // Create material
-        const material = new THREE.MeshLambertMaterial({ 
-          color: 0x888888,
-          side: THREE.DoubleSide
-        });
+          // Clean up blob URL
+          URL.revokeObjectURL(url);
 
-        // Create mesh
-        this.currentMesh = new THREE.Mesh(geometry, material);
-        this.scene!.add(this.currentMesh);
+          // Create material
+          const material = new THREE.MeshLambertMaterial({
+            color: 0x888888,
+            side: THREE.DoubleSide,
+          });
 
-        // Center and fit the camera to the model
-        this.fitCameraToModel();
-      }, undefined, (error) => {
-        URL.revokeObjectURL(url);
-        console.error('STL loading error:', error);
-        this.showError(`Failed to load STL: ${error}`);
-      });
+          // Create mesh
+          this.currentMesh = new THREE.Mesh(geometry, material);
+          this.scene!.add(this.currentMesh);
+          console.log("Mesh added to scene");
+
+          // Center and fit the camera to the model
+          this.fitCameraToModel();
+        },
+        undefined,
+        (error) => {
+          URL.revokeObjectURL(url);
+          console.error("STL loading error:", error);
+          this.showError(`Failed to load STL: ${error}`);
+        },
+      );
     } catch (error) {
-      console.error('STL rendering error:', error);
+      console.error("STL rendering error:", error);
       this.showError(`Failed to render STL: ${error}`);
     }
   }
@@ -103,7 +117,7 @@ export class StlViewer {
       75,
       this.root.clientWidth / this.root.clientHeight,
       0.1,
-      1000
+      1000,
     );
     this.camera.position.set(50, 50, 50);
 
@@ -133,19 +147,20 @@ export class StlViewer {
     // Handle window resize
     const handleResize = () => {
       if (!this.root || !this.camera || !this.renderer) return;
-      
+
       const width = this.root.clientWidth;
       const height = this.root.clientHeight;
-      
+
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(width, height);
     };
 
-    window.addEventListener('resize', handleResize);
-    
+    globalThis.addEventListener("resize", handleResize);
+
     // Store resize handler for cleanup
-    (this.renderer.domElement as any)._resizeHandler = handleResize;
+    // @ts-ignore: Adding custom property for cleanup
+    this.renderer.domElement._resizeHandler = handleResize;
   }
 
   private startRenderLoop() {
