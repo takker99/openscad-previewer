@@ -56,7 +56,7 @@ export class StlViewer {
 
     try {
       // Create blob URL for STL data
-      const blob = new Blob([stlData], { type: "model/stl" });
+      const blob = new Blob([stlData.buffer as ArrayBuffer], { type: "model/stl" });
       const url = URL.createObjectURL(blob);
       console.log("Created blob URL:", url);
 

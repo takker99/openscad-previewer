@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/deno";
 import { proxy } from "hono/proxy";
-import { renderToString } from "preact-render-to-string";
+import { renderToString } from "react-dom/server";
 import { streamSSE } from "hono/streaming";
 
 type ChangeKind = "create" | "modify" | "remove";

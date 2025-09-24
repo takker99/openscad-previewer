@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangeStream, type FileChange } from "./changeStream.ts";
 import { OpenScadEngine } from "./openscadEngine.ts";
 import { StlViewer } from "./stlViewer.ts";
@@ -78,20 +78,20 @@ export function App({ entry }: AppProps) {
   }, [serverUrl, entry, engine]);
 
   return (
-    <div style="display:flex;flex-direction:column;height:100vh;width:100vw;">
+    <div style={{display: "flex", flexDirection: "column", height: "100vh", width: "100vw"}}>
       <header>
         <strong>OpenSCAD Preview</strong>
-        <span style="color:#aaa;margin-left:10px">Entry: {entry}</span>
-        <span ref={statusRef} class="warn" style="margin-left:10px">Idle</span>
+        <span style={{color: "#aaa", marginLeft: "10px"}}>Entry: {entry}</span>
+        <span ref={statusRef} className="warn" style={{marginLeft: "10px"}}>Idle</span>
         {timeMs !== undefined && (
-          <span style="color:#aaa;margin-left:10px">
+          <span style={{color: "#aaa", marginLeft: "10px"}}>
             {Math.round(timeMs)} ms
           </span>
         )}
       </header>
-      <div ref={containerRef} style="flex:1; min-height:0;"></div>
+      <div ref={containerRef} style={{flex: 1, minHeight: 0}}></div>
       {error && (
-        <pre style="max-height:30vh;overflow:auto;margin:0;padding:8px;border-top:1px solid #222;background:#111;color:#ef4444;">
+        <pre style={{maxHeight: "30vh", overflow: "auto", margin: 0, padding: "8px", borderTop: "1px solid #222", background: "#111", color: "#ef4444"}}>
           {error}
         </pre>
       )}

@@ -7,18 +7,23 @@
       "deno.ns"
     ],
     "jsx": "react-jsx",
-    "jsxImportSource": "preact",
+    "jsxImportSource": "react",
     "types": ["vite/client"]
   },
   "imports": {
     "@hono/vite-build": "npm:@hono/vite-build@^1.7.0",
-    "preact-render-to-string": "npm:preact-render-to-string@^6.6.1",
+    "react-dom/server": "npm:react-dom@^18.2.0/server",
     "vite": "npm:vite@^4.4.9",
-    "@preact/preset-vite": "npm:@preact/preset-vite@^2.5.0",
-    "preact": "npm:preact@^10.17.1",
+    "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^4.0.0",
+    "react": "npm:react@^18.2.0",
+    "react-dom": "npm:react-dom@^18.2.0",
+    "@react-three/fiber": "npm:@react-three/fiber@^8.15.0",
+    "@react-three/drei": "npm:@react-three/drei@^9.88.0",
     "three": "npm:three@^0.157.0",
     "three-stdlib": "npm:three-stdlib@^2.26.4",
     "@types/three": "npm:@types/three@^0.157.0",
+    "@types/react": "npm:@types/react@^18.2.0",
+    "@types/react-dom": "npm:@types/react-dom@^18.2.0",
     "hono": "npm:hono@^4.6.3",
     "@hono/vite-dev-server": "npm:@hono/vite-dev-server@^0.18.1"
   },

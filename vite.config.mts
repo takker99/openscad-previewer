@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import preact from "@preact/preset-vite";
+import react from "@vitejs/plugin-react";
 import devServer, { defaultOptions } from "@hono/vite-dev-server";
 import build from "@hono/vite-build";
 
@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
   } else {
     return {
       plugins: [
-        preact(),
+        react(),
         devServer({
           entry: "./server.tsx",
           exclude: [...defaultOptions.exclude, /^\/.vite\/.+/],
