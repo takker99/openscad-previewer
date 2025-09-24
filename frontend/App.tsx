@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangeStream, type FileChange } from "./changeStream.ts";
 import { OpenScadEngine } from "./openscadEngine.ts";
-import { StlViewer } from "./stlViewer.ts";
+import { StlCanvas } from "./StlCanvas.tsx";
 
 interface AppProps {
   entry: string;
@@ -11,13 +11,11 @@ const serverUrl = new URL(location.pathname, location.href).href.slice(0, -1);
 
 export function App({ entry }: AppProps) {
   const statusRef = useRef<HTMLSpanElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [timeMs, setTimeMs] = useState<number | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [stlData, setStlData] = useState<Uint8Array | undefined>(undefined);
 
   const engine = useMemo(() => new OpenScadEngine(), []);
-
-  const viewer = useMemo(() => new StlViewer(), []);
 
   const compile = () => {
     setError(undefined);
@@ -32,22 +30,21 @@ export function App({ entry }: AppProps) {
         statusRef.current.textContent = "OK";
       }
       setTimeMs(res.timeMs);
-      viewer.render(res.stl);
+      setStlData(res.stl);
+      setError(undefined);
     } else {
       if (statusRef.current) {
         statusRef.current.className = "err";
         statusRef.current.textContent = "Error";
       }
       setTimeMs(res.timeMs);
-      viewer.showError(res.errors.join("\n"));
       setError(res.errors.join("\n"));
+      setStlData(undefined);
     }
   };
 
   useEffect(() => {
     (async () => {
-      if (!containerRef.current) return;
-      viewer.mount(containerRef.current);
       await engine.init();
       await engine.hydrateScadFiles(serverUrl, serverUrl);
       compile();
@@ -72,7 +69,6 @@ export function App({ entry }: AppProps) {
       return () => {
         off();
         cs.stop();
-        viewer.unmount();
       };
     })();
   }, [serverUrl, entry, engine]);
@@ -89,12 +85,9 @@ export function App({ entry }: AppProps) {
           </span>
         )}
       </header>
-      <div ref={containerRef} style={{flex: 1, minHeight: 0}}></div>
-      {error && (
-        <pre style={{maxHeight: "30vh", overflow: "auto", margin: 0, padding: "8px", borderTop: "1px solid #222", background: "#111", color: "#ef4444"}}>
-          {error}
-        </pre>
-      )}
+      <div style={{flex: 1, minHeight: 0}}>
+        <StlCanvas stlData={stlData} error={error} />
+      </div>
     </div>
   );
 }
