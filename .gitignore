@@ -138,3 +138,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite
+
+# Test files (not part of main codebase)
+test-server.js
+package.json
+package-lock.json
+public
