@@ -199,7 +199,7 @@ app.use(
 app.use(
   "/file/*",
   serveStatic({
-    root: "./",
+    root: ROOT,
     rewriteRequestPath: (path) => path.replace(/^\/file/, ""),
   }),
 );
