@@ -67,7 +67,10 @@ async function getOpenSCADVersion(version: string = "latest"): Promise<string> {
   }
 }
 
-const app = new Hono();
+/**
+ * Server Route
+ */
+const app: Hono = new Hono();
 
 app.use("*", logger());
 

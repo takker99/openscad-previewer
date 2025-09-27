@@ -9,11 +9,12 @@
       "deno.ns"
     ]
   },
-  "exports": "./main.ts",
+  "exports": "./server.tsx",
   "imports": {
     "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.0",
     "@react-three/drei": "npm:@react-three/drei@^9.88.0",
     "@react-three/fiber": "npm:@react-three/fiber@^8.15.0",
+    "@takker/openscad-previewer": "./server.tsx",
     "@types/react": "npm:@types/react@^18.2.0",
     "@types/react-dom": "npm:@types/react-dom@^18.2.0",
     "@types/three": "npm:@types/three@^0.160.0",
