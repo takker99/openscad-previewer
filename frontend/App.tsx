@@ -23,12 +23,16 @@ export function App({ entry }: AppProps) {
     setIsClient(true);
   }, []);
 
-  const compile = () => {
+  const compile = async () => {
     setError(undefined);
     if (statusRef.current) {
       statusRef.current.className = "warn";
       statusRef.current.textContent = "Compiling...";
     }
+    
+    // Allow React to render the "Compiling..." state before starting the heavy work
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
     const res = engine.compile(entry);
     if (res.ok) {
       if (statusRef.current) {
@@ -54,7 +58,7 @@ export function App({ entry }: AppProps) {
     (async () => {
       await engine.init();
       await engine.hydrateScadFiles(serverUrl, serverUrl);
-      compile();
+      await compile();
 
       const cs = new ChangeStream(serverUrl);
       const off = cs.onChange(async (ev: FileChange) => {
@@ -67,9 +71,9 @@ export function App({ entry }: AppProps) {
       let t: number | undefined;
       const scheduleRebuild = () => {
         if (t) clearTimeout(t);
-        t = setTimeout(() => {
+        t = setTimeout(async () => {
           t = undefined;
-          compile();
+          await compile();
         }, 80) as unknown as number;
       };
 

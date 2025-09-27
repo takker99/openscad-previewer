@@ -141,14 +141,32 @@ export class OpenScadEngine {
       }
 
       console.log(`Attempting to compile: ${entryPath}`);
+      console.log('Calling OpenSCAD WASM with args:', [
+        entryPath,
+        "--enable=manifold",
+        "-o",
+        this.outFile,
+      ]);
+      
+      // Clear any previous error state
+      this.stdout = [];
+      this.stderr = [];
+      
+      const callStart = performance.now();
       const code = this.mod!.callMain([
         entryPath,
         "--enable=manifold",
         "-o",
         this.outFile,
       ]);
+      const callTime = performance.now() - callStart;
+      console.log(`OpenSCAD callMain completed in ${callTime}ms with code: ${code}`);
       const timeMs = performance.now() - start;
       const errTxt = this.stderr.join("\n").trim();
+      const outTxt = this.stdout.join("\n").trim();
+      
+      console.log(`Compilation result - Code: ${code}, Stderr: "${errTxt}", Stdout: "${outTxt}"`);
+      
       if (code !== 0 || errTxt) {
         if (code !== 0) {
           return {
@@ -158,13 +176,25 @@ export class OpenScadEngine {
           };
         }
       }
-      const stl = this.mod!.FS.readFile(this.outFile);
-      return {
-        ok: true,
-        timeMs,
-        stl,
-        warnings: this.stdout.length ? [this.stdout.join("\n")] : undefined,
-      };
+      
+      // Check if output file exists
+      try {
+        const stl = this.mod!.FS.readFile(this.outFile);
+        console.log(`Successfully read STL file: ${stl.length} bytes`);
+        return {
+          ok: true,
+          timeMs,
+          stl,
+          warnings: this.stdout.length ? [this.stdout.join("\n")] : undefined,
+        };
+      } catch (fileError) {
+        console.error(`Failed to read output file ${this.outFile}:`, fileError);
+        return {
+          ok: false,
+          timeMs,
+          errors: [`Failed to read output file: ${fileError}`],
+        };
+      }
     } catch (e: unknown) {
       const timeMs = performance.now() - start;
       const error = e instanceof Error ? e.message : String(e);

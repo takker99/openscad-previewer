@@ -44,7 +44,8 @@ Examples:
   return { root, version };
 }
 
-const { root: ROOT, version: OPENSCAD_VERSION } = parseArgs();
+const { root: ROOT_RAW, version: OPENSCAD_VERSION } = parseArgs();
+const ROOT = await Deno.realPath(ROOT_RAW);
 
 // OpenSCAD WASM バージョン取得
 async function getOpenSCADVersion(version: string = "latest"): Promise<string> {
@@ -249,9 +250,11 @@ app.get("/events", (c) =>
         if (!kind) continue;
 
         for (const p of ev.paths) {
+          console.log(`File change detected: ${p}, ROOT: ${ROOT}`);
           const rel = p.startsWith(ROOT)
             ? p.substring(ROOT.length + 1).replaceAll("\\", "/")
             : p;
+          console.log(`Relative path: ${rel}`);
           const key = `${kind}:${rel}`;
 
           clearTimeout(debounce.get(key));
