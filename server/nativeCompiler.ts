@@ -31,8 +31,12 @@ export class NativeOpenSCADCompiler {
 
   private async detectOpenSCAD(): Promise<void> {
     // Try to detect if native OpenSCAD is available
-    const possiblePaths = ["openscad", "/usr/bin/openscad", "/opt/openscad/bin/openscad"];
-    
+    const possiblePaths = [
+      "openscad",
+      "/usr/bin/openscad",
+      "/opt/openscad/bin/openscad",
+    ];
+
     for (const path of possiblePaths) {
       try {
         const process = new Deno.Command(path, {
@@ -40,7 +44,7 @@ export class NativeOpenSCADCompiler {
           stdout: "piped",
           stderr: "piped",
         });
-        
+
         const { code } = await process.output();
         if (code === 0) {
           this.openscadPath = path;
@@ -51,7 +55,7 @@ export class NativeOpenSCADCompiler {
         // Continue to next path
       }
     }
-    
+
     console.log("Native OpenSCAD not found, will use WASM fallback");
   }
 
@@ -87,10 +91,11 @@ export class NativeOpenSCADCompiler {
       const process = new Deno.Command(this.openscadPath, {
         args: [
           inputFile,
-          "-o", outputFile,
+          "-o",
+          outputFile,
           "--export-format=binstl",
           "--enable=manifold",
-          "--enable=fast-csg", 
+          "--enable=fast-csg",
           "--enable=lazy-union",
         ],
         stdout: "piped",
@@ -101,8 +106,12 @@ export class NativeOpenSCADCompiler {
       const { code, stdout, stderr } = await process.output();
       const duration = Date.now() - start;
 
-      const stdoutStr = new TextDecoder().decode(stdout).split('\n').filter(Boolean);
-      const stderrStr = new TextDecoder().decode(stderr).split('\n').filter(Boolean);
+      const stdoutStr = new TextDecoder().decode(stdout).split("\n").filter(
+        Boolean,
+      );
+      const stderrStr = new TextDecoder().decode(stderr).split("\n").filter(
+        Boolean,
+      );
 
       if (code !== 0) {
         return {
@@ -137,7 +146,6 @@ export class NativeOpenSCADCompiler {
         stdout: stdoutStr,
         stderr: stderrStr,
       };
-
     } catch (error) {
       return {
         success: false,

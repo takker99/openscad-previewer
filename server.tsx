@@ -309,7 +309,7 @@ app.get("/api/stl/:resultKey", (c) => {
     return c.json({ error: "STL result not found or expired" }, 404);
   }
 
-  return c.body(result.stl.buffer, 200, {
+  return c.body(result.stl.buffer as ArrayBuffer, 200, {
     "Content-Type": "application/octet-stream",
     "Content-Disposition": `attachment; filename="model.stl"`,
   });

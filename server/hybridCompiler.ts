@@ -8,7 +8,11 @@
  * (at your option) any later version.
  */
 
-import { NativeOpenSCADCompiler, type NativeCompileOptions, type NativeCompileResult } from "./nativeCompiler.ts";
+import {
+  type NativeCompileOptions,
+  type NativeCompileResult,
+  NativeOpenSCADCompiler,
+} from "./nativeCompiler.ts";
 
 export type HybridCompileOptions = NativeCompileOptions;
 export type HybridCompileResult = NativeCompileResult;
@@ -37,7 +41,8 @@ export class HybridOpenSCADCompiler {
         "For now, please use the browser-based compilation by reverting to the previous version.",
         "The server-side architecture is prepared but needs proper WASM environment setup.",
       ],
-      error: "Server-side compilation not available - please install native OpenSCAD or use browser compilation",
+      error:
+        "Server-side compilation not available - please install native OpenSCAD or use browser compilation",
     };
   }
 
