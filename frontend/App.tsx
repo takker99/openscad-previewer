@@ -48,10 +48,10 @@ export function App({ entry }: AppProps) {
       statusRef.current.className = "warn";
       statusRef.current.textContent = "Compiling...";
     }
-    
+
     // Allow React to render the "Compiling..." state before starting the heavy work
-    await new Promise(resolve => setTimeout(resolve, 10));
-    
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
     const res = engine.compile(entry);
     if (res.ok) {
       if (statusRef.current) {

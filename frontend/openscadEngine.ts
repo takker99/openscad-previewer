@@ -38,7 +38,10 @@ export class OpenScadEngine {
   private outFile = `${this.outdir}/model.stl`;
   private baseUrl: string;
   private moduleCorrupted = false;
-  private rehydrationData?: { listEndpointBase: string; fileEndpointBase: string };
+  private rehydrationData?: {
+    listEndpointBase: string;
+    fileEndpointBase: string;
+  };
 
   constructor(opts?: InitOptions) {
     this.baseUrl = opts?.baseUrl ?? "/openscad";
@@ -85,7 +88,7 @@ export class OpenScadEngine {
   async hydrateScadFiles(listEndpointBase: string, fileEndpointBase: string) {
     // Store rehydration data for potential module recovery
     this.rehydrationData = { listEndpointBase, fileEndpointBase };
-    
+
     const r = await fetch(`${listEndpointBase}/list?ext=scad`);
     if (!r.ok) throw new Error(await r.text());
     const { files } = await r.json() as { files: { path: string }[] };
@@ -146,10 +149,12 @@ export class OpenScadEngine {
       return {
         ok: false,
         timeMs: 0,
-        errors: ['OpenSCAD WASM module is recovering. Please wait a moment and try again.'],
+        errors: [
+          "OpenSCAD WASM module is recovering. Please wait a moment and try again.",
+        ],
       };
     }
-    
+
     this.stdout = [];
     this.stderr = [];
     const start = performance.now();
@@ -174,11 +179,11 @@ export class OpenScadEngine {
       }
 
       console.log(`Attempting to compile: ${entryPath}`);
-      
+
       // Clear any previous error state
       this.stdout = [];
       this.stderr = [];
-      
+
       const callStart = performance.now();
       const code = this.mod!.callMain([
         entryPath,
@@ -187,10 +192,12 @@ export class OpenScadEngine {
         this.outFile,
       ]);
       const callTime = performance.now() - callStart;
-      console.log(`OpenSCAD compilation completed in ${callTime}ms with code: ${code}`);
+      console.log(
+        `OpenSCAD compilation completed in ${callTime}ms with code: ${code}`,
+      );
       const timeMs = performance.now() - start;
       const errTxt = this.stderr.join("\n").trim();
-      
+
       if (code !== 0 || errTxt) {
         if (code !== 0) {
           return {
@@ -200,7 +207,7 @@ export class OpenScadEngine {
           };
         }
       }
-      
+
       // Check if output file exists
       try {
         const stl = this.mod!.FS.readFile(this.outFile);
@@ -223,31 +230,35 @@ export class OpenScadEngine {
       const timeMs = performance.now() - start;
       const error = e instanceof Error ? e.message : String(e);
       const allErr = [this.stderr.join("\n"), error].filter(Boolean);
-      
+
       // Check if this is a numeric WASM exception (memory corruption)
       const numericError = /^\d+$/.test(error);
       if (numericError) {
-        console.warn(`OpenSCAD WASM module requires reinitialization after hot reload. Recovering...`);
+        console.warn(
+          `OpenSCAD WASM module requires reinitialization after hot reload. Recovering...`,
+        );
         this.moduleCorrupted = true;
-        
+
         // Schedule async reinitialization
         setTimeout(async () => {
           try {
             await this.reinitializeModule();
-            console.log('OpenSCAD WASM module recovered successfully');
+            console.log("OpenSCAD WASM module recovered successfully");
           } catch (reinitError) {
-            console.error('Failed to recover WASM module:', reinitError);
+            console.error("Failed to recover WASM module:", reinitError);
             this.moduleCorrupted = true; // Keep it marked as corrupted
           }
         }, 100);
-        
-        return { 
-          ok: false, 
-          timeMs, 
-          errors: [`OpenSCAD WASM module is recovering from hot reload. Please wait a moment and try again.`] 
+
+        return {
+          ok: false,
+          timeMs,
+          errors: [
+            `OpenSCAD WASM module is recovering from hot reload. Please wait a moment and try again.`,
+          ],
         };
       }
-      
+
       return { ok: false, timeMs, errors: allErr };
     }
   }
@@ -343,25 +354,25 @@ export class OpenScadEngine {
   }
 
   private async reinitializeModule() {
-    console.log('Recovering OpenSCAD WASM module...');
-    
+    console.log("Recovering OpenSCAD WASM module...");
+
     // Clear the current module and ready promise
     this.mod = undefined;
     this.readyPromise = undefined;
     this.moduleCorrupted = false;
-    
+
     // Reinitialize the module
     await this.init();
-    
+
     // Re-hydrate all files if we have the data
     if (this.rehydrationData) {
       await this.hydrateScadFiles(
         this.rehydrationData.listEndpointBase,
-        this.rehydrationData.fileEndpointBase
+        this.rehydrationData.fileEndpointBase,
       );
     }
-    
-    console.log('OpenSCAD WASM module recovered successfully');
+
+    console.log("OpenSCAD WASM module recovered successfully");
   }
 
   private debugFS() {
