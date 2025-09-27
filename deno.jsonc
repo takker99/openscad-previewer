@@ -27,6 +27,7 @@
   },
   "name": "@takker/openscad-previewer",
   "tasks": {
+    "check": "deno fmt --check && deno lint && deno check **/*.ts **/*.tsx",
     "dev": "deno serve --watch -A server.tsx",
     "fix": "deno fmt && deno lint --fix && deno check **/*.ts **/*.tsx"
   },
