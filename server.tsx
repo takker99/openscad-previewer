@@ -25,7 +25,7 @@ import { streamSSE } from "hono/streaming";
 import { renderToString } from "react-dom/server";
 import { build } from "esbuild";
 import { denoPlugin } from "@deno/esbuild-plugin";
-import { HybridOpenSCADCompiler } from "./server/hybridCompiler.ts";
+import { OpenSCADCompiler } from "./server/compiler.ts";
 
 type ChangeKind = "create" | "modify" | "remove";
 
@@ -68,7 +68,7 @@ const { root: ROOT_RAW, version: OPENSCAD_VERSION } = parseArgs();
 const ROOT = await Deno.realPath(ROOT_RAW);
 
 // Initialize compiler
-const compiler = new HybridOpenSCADCompiler();
+const compiler = new OpenSCADCompiler();
 
 // Store compiled STL results in memory
 const compiledResults = new Map<string, {

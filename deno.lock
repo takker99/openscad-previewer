@@ -623,6 +623,9 @@
       ]
     }
   },
+  "remote": {
+    "http://localhost:8000/openscad/openscad.js": "2809954ab46b618134068464ef5c5c568191ce34b131ad6e8639a3bb9fbf17ff"
+  },
   "workspace": {
     "dependencies": [
       "jsr:@deno/esbuild-plugin@^1.2.0",

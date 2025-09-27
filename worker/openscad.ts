@@ -29,7 +29,7 @@ export interface CompileResult {
 export class OpenSCADEngine {
   private baseUrl: string;
 
-  constructor(baseUrl = "/openscad") {
+  constructor(baseUrl = "http://localhost:8000/openscad") {
     this.baseUrl = baseUrl;
   }
 
