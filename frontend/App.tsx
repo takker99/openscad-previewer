@@ -1,25 +1,20 @@
 /*
- * OpenSCAD Previewer - Main React Application Component
+ * OpenSCAD Previewer - Server-side App Component
  * Copyright (C) 2025 takker
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChangeStream, type FileChange } from "./changeStream.ts";
-import { OpenScadEngine } from "./openscadEngine.ts";
+import { ServerChangeStream } from "./changeStream.ts";
+import {
+  type CompileEvent,
+  ServerOpenScadEngine,
+  type StlEvent,
+} from "./engine.ts";
 import { StlCanvas } from "./StlCanvas.tsx";
 
 interface AppProps {
@@ -34,66 +29,110 @@ export function App({ entry }: AppProps) {
   const [error, setError] = useState<string | undefined>(undefined);
   const [stlData, setStlData] = useState<Uint8Array | undefined>(undefined);
   const [isClient, setIsClient] = useState(false);
+  const [compilationLog, setCompilationLog] = useState<string[]>([]);
+  const [logCollapsed, setLogCollapsed] = useState(false);
 
-  const engine = useMemo(() => new OpenScadEngine(), []);
+  const engine = useMemo(() => new ServerOpenScadEngine(serverUrl), []);
 
   // Detect client-side rendering
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const compile = () => {
-    setError(undefined);
+  const updateStatus = (
+    status: "idle" | "compiling" | "ok" | "error",
+    text: string,
+  ) => {
     if (statusRef.current) {
-      statusRef.current.className = "warn";
-      statusRef.current.textContent = "Compiling...";
+      statusRef.current.className = status === "idle" ? "warn" : status;
+      statusRef.current.textContent = text;
     }
-    const res = engine.compile(entry);
-    if (res.ok) {
-      if (statusRef.current) {
-        statusRef.current.className = "ok";
-        statusRef.current.textContent = "OK";
-      }
-      setTimeMs(res.timeMs);
-      setStlData(res.stl);
-      setError(undefined);
-    } else {
-      if (statusRef.current) {
-        statusRef.current.className = "err";
-        statusRef.current.textContent = "Error";
-      }
-      console.error("OpenSCAD Error:", res.errors);
-      setTimeMs(res.timeMs);
-      setError(res.errors.join("\n"));
-      setStlData(undefined);
-    }
+  };
+
+  const clearLog = () => {
+    setCompilationLog([]);
+  };
+
+  const toggleLogCollapsed = () => {
+    setLogCollapsed(!logCollapsed);
   };
 
   useEffect(() => {
     (async () => {
       await engine.init();
-      await engine.hydrateScadFiles(serverUrl, serverUrl);
-      compile();
+      updateStatus("compiling", "Compiling...");
 
-      const cs = new ChangeStream(serverUrl);
-      const off = cs.onChange(async (ev: FileChange) => {
-        if (!/\.(scad)$/i.test(ev.path) && ev.kind !== "remove") return;
-        await engine.applyChange(ev.kind, ev.path, serverUrl);
-        scheduleRebuild();
+      const cs = new ServerChangeStream(serverUrl, entry);
+
+      // Handle file changes
+      const offChange = cs.onChange((ev) => {
+        console.log(`File ${ev.kind}: ${ev.path}`);
+        setCompilationLog((prev) => [...prev, `File ${ev.kind}: ${ev.path}`]);
       });
+
+      // Handle compilation results
+      const offCompile = cs.onCompile((ev: CompileEvent) => {
+        console.log(
+          `Compilation ${
+            ev.success ? "succeeded" : "failed"
+          } in ${ev.duration}ms`,
+          ev,
+        );
+
+        setTimeMs(ev.duration);
+
+        // Update log
+        const logEntries: string[] = [];
+        if (ev.trigger) {
+          logEntries.push(ev.trigger);
+        }
+        logEntries.push(
+          `Compilation ${
+            ev.success ? "succeeded" : "failed"
+          } in ${ev.duration}ms`,
+        );
+        if (ev.stdout.length > 0) {
+          logEntries.push(...ev.stdout);
+        }
+        if (ev.stderr.length > 0) {
+          logEntries.push(...ev.stderr);
+        }
+
+        setCompilationLog((prev) => [...prev, ...logEntries]);
+
+        if (ev.success) {
+          updateStatus("ok", "OK");
+          setError(undefined);
+          if (ev.stlSize > 0) {
+            console.log(`STL generated: ${ev.stlSize} bytes`);
+          }
+        } else {
+          updateStatus("error", "Error");
+          setError(ev.error || "Compilation failed");
+          setStlData(undefined);
+        }
+      });
+
+      // Handle STL data
+      const offStl = cs.onStl(async (ev: StlEvent) => {
+        console.log(`Loading STL: ${ev.resultKey} (${ev.size} bytes)`);
+
+        try {
+          const stl = await engine.loadStl(ev.resultKey);
+          setStlData(stl);
+          console.log(`STL loaded successfully: ${stl.length} bytes`);
+        } catch (error) {
+          console.error("Failed to load STL:", error);
+          setError(`Failed to load STL: ${error}`);
+        }
+      });
+
       cs.start();
 
-      let t: number | undefined;
-      const scheduleRebuild = () => {
-        if (t) clearTimeout(t);
-        t = setTimeout(() => {
-          t = undefined;
-          compile();
-        }, 80) as unknown as number;
-      };
-
       return () => {
-        off();
+        offChange();
+        offCompile();
+        offStl();
         cs.stop();
       };
     })();
@@ -109,7 +148,7 @@ export function App({ entry }: AppProps) {
       }}
     >
       <header>
-        <strong>OpenSCAD Preview</strong>
+        <strong>OpenSCAD Preview (Server)</strong>
         <span style={{ color: "#aaa", marginLeft: "10px" }}>
           Entry: {entry}
         </span>
@@ -122,44 +161,135 @@ export function App({ entry }: AppProps) {
           </span>
         )}
       </header>
-      <div style={{ flex: 1, minHeight: 0 }}>
-        {isClient
-          ? (
-            <React.Suspense
-              fallback={
-                <div
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {isClient
+            ? (
+              <React.Suspense
+                fallback={
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#1a1a1a",
+                      color: "#aaa",
+                    }}
+                  >
+                    Loading 3D Viewer...
+                  </div>
+                }
+              >
+                <StlCanvas stlData={stlData} error={error} />
+              </React.Suspense>
+            )
+            : (
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "#1a1a1a",
+                  color: "#aaa",
+                }}
+              >
+                Loading OpenSCAD Preview...
+              </div>
+            )}
+        </div>
+        <div
+          style={{
+            width: logCollapsed ? "40px" : "300px",
+            background: "#1e1e1e",
+            borderLeft: "1px solid #333",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            transition: "width 0.2s ease",
+          }}
+        >
+          <div
+            style={{
+              padding: "10px",
+              borderBottom: "1px solid #333",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {!logCollapsed && <span>Compilation Log</span>}
+            <div style={{ display: "flex", gap: "5px" }}>
+              {!logCollapsed && (
+                <button
+                  type="button"
+                  onClick={clearLog}
                   style={{
-                    width: "100%",
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "#1a1a1a",
+                    background: "#333",
+                    border: "1px solid #555",
                     color: "#aaa",
+                    padding: "2px 6px",
+                    fontSize: "10px",
+                    cursor: "pointer",
+                    borderRadius: "2px",
                   }}
                 >
-                  Loading 3D Viewer...
-                </div>
-              }
-            >
-              <StlCanvas stlData={stlData} error={error} />
-            </React.Suspense>
-          )
-          : (
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={toggleLogCollapsed}
+                style={{
+                  background: "#333",
+                  border: "1px solid #555",
+                  color: "#aaa",
+                  padding: "2px 6px",
+                  fontSize: "10px",
+                  cursor: "pointer",
+                  borderRadius: "2px",
+                }}
+              >
+                {logCollapsed ? "▶" : "◀"}
+              </button>
+            </div>
+          </div>
+          {!logCollapsed && (
             <div
               style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "#1a1a1a",
-                color: "#aaa",
+                flex: 1,
+                overflow: "auto",
+                padding: "10px",
+                fontSize: "12px",
+                fontFamily: "monospace",
+                lineHeight: "1.4",
               }}
             >
-              Loading OpenSCAD Preview...
+              {compilationLog.map((line, index) => (
+                <div
+                  key={index}
+                  style={{
+                    marginBottom: "2px",
+                    color: line.includes("failed")
+                      ? "#ff6b6b"
+                      : line.includes("succeeded")
+                      ? "#51cf66"
+                      : line.includes("File")
+                      ? "#74c0fc"
+                      : "#aaa",
+                  }}
+                >
+                  {line}
+                </div>
+              ))}
             </div>
           )}
+        </div>
       </div>
     </div>
   );

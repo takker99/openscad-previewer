@@ -1,50 +1,110 @@
 /*
- * OpenSCAD Previewer - File Change Stream using Server-Sent Events
+ * OpenSCAD Previewer - Server-side Change Stream
  * Copyright (C) 2025 takker
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-export type FileChange = { path: string; kind: "create" | "modify" | "remove" };
+import type { CompileEvent, StlEvent } from "./engine.ts";
 
-export class ChangeStream {
-  private es?: EventSource;
-  private listeners = new Set<(ev: FileChange) => void>();
-  constructor(private baseUrl: string) {}
+export interface FileChange {
+  path: string;
+  kind: "create" | "modify" | "remove";
+}
 
-  start() {
-    if (this.es) return;
-    this.es = new EventSource(`${this.baseUrl}/events`);
-    this.es.addEventListener("change", (e: MessageEvent) => {
+export class ServerChangeStream {
+  private serverUrl: string;
+  private eventSource?: EventSource;
+  private onChangeCallback?: (ev: FileChange) => void;
+  private onCompileCallback?: (ev: CompileEvent) => void;
+  private onStlCallback?: (ev: StlEvent) => void;
+  private entry: string;
+
+  constructor(serverUrl: string, entry: string = "main.scad") {
+    this.serverUrl = serverUrl;
+    this.entry = entry;
+  }
+
+  onChange(callback: (ev: FileChange) => void): () => void {
+    this.onChangeCallback = callback;
+    return () => {
+      this.onChangeCallback = undefined;
+    };
+  }
+
+  onCompile(callback: (ev: CompileEvent) => void): () => void {
+    this.onCompileCallback = callback;
+    return () => {
+      this.onCompileCallback = undefined;
+    };
+  }
+
+  onStl(callback: (ev: StlEvent) => void): () => void {
+    this.onStlCallback = callback;
+    return () => {
+      this.onStlCallback = undefined;
+    };
+  }
+
+  start(): void {
+    if (this.eventSource) {
+      this.stop();
+    }
+
+    const url = new URL(`${this.serverUrl}/events`);
+    url.searchParams.set("entry", this.entry);
+
+    this.eventSource = new EventSource(url.toString());
+
+    this.eventSource.addEventListener("change", (event) => {
       try {
-        const data = JSON.parse(e.data) as FileChange;
-        this.listeners.forEach((fn) => fn(data));
-      } catch (err) {
-        console.error("Bad change event", err);
+        const data = JSON.parse(event.data) as FileChange;
+        if (this.onChangeCallback) {
+          this.onChangeCallback(data);
+        }
+      } catch (error) {
+        console.error("Failed to parse change event:", error);
       }
     });
-    this.es.onerror = (e) => console.warn("SSE error", e);
+
+    this.eventSource.addEventListener("compile", (event) => {
+      try {
+        const data = JSON.parse(event.data) as CompileEvent;
+        if (this.onCompileCallback) {
+          this.onCompileCallback(data);
+        }
+      } catch (error) {
+        console.error("Failed to parse compile event:", error);
+      }
+    });
+
+    this.eventSource.addEventListener("stl", (event) => {
+      try {
+        const data = JSON.parse(event.data) as StlEvent;
+        if (this.onStlCallback) {
+          this.onStlCallback(data);
+        }
+      } catch (error) {
+        console.error("Failed to parse STL event:", error);
+      }
+    });
+
+    this.eventSource.addEventListener("ping", (_event) => {
+      console.log("Server ping received");
+    });
+
+    this.eventSource.addEventListener("error", (event) => {
+      console.error("SSE error", event);
+    });
   }
 
-  onChange(fn: (ev: FileChange) => void) {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
-  }
-
-  stop() {
-    this.es?.close();
-    this.es = undefined;
+  stop(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = undefined;
+    }
   }
 }

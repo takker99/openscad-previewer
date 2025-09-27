@@ -20,11 +20,11 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/deno";
-import { proxy } from "hono/proxy";
 import { streamSSE } from "hono/streaming";
 import { renderToString } from "react-dom/server";
 import { build } from "esbuild";
 import { denoPlugin } from "@deno/esbuild-plugin";
+import { OpenSCADCompiler } from "./server/compiler.ts";
 
 type ChangeKind = "create" | "modify" | "remove";
 
@@ -63,7 +63,23 @@ Examples:
   return { root, version };
 }
 
-const { root: ROOT, version: OPENSCAD_VERSION } = parseArgs();
+const { root: ROOT_RAW, version: OPENSCAD_VERSION } = parseArgs();
+const ROOT = await Deno.realPath(ROOT_RAW);
+
+// Get the resolved OpenSCAD version
+const RESOLVED_OPENSCAD_VERSION = await getOpenSCADVersion(OPENSCAD_VERSION);
+
+// Initialize compiler
+const compiler = new OpenSCADCompiler();
+
+// Store compiled STL results in memory
+const compiledResults = new Map<string, {
+  stl: Uint8Array;
+  timestamp: number;
+  duration: number;
+  stdout: string[];
+  stderr: string[];
+}>();
 
 // OpenSCAD WASM バージョン取得
 async function getOpenSCADVersion(version: string = "latest"): Promise<string> {
@@ -160,28 +176,6 @@ app.get("/", (c) => {
   }
 });
 
-// OpenSCAD WASM ファイルプロキシ
-app.get("/openscad/:path{.+}", async (c) => {
-  const tag = await getOpenSCADVersion(OPENSCAD_VERSION);
-  const path = c.req.param("path");
-  const contentType = path.endsWith(".wasm")
-    ? "application/wasm"
-    : path.endsWith(".js")
-    ? "text/javascript"
-    : "application/octet-stream";
-  const res = await proxy(
-    `https://github.com/openscad/openscad-wasm/releases/download/${tag}/${
-      c.req.param("path")
-    }`,
-    {
-      headers: c.req.header(),
-    },
-  );
-  res.headers.delete("Set-Cookie");
-  res.headers.set("Content-Type", contentType);
-  return res;
-});
-
 // ファイル一覧（初期同期用）
 app.get("/list", async (c) => {
   const extFilter = (c.req.query("ext") ?? "").split(",").map((s) =>
@@ -218,10 +212,89 @@ app.use(
 app.use(
   "/file/*",
   serveStatic({
-    root: "./",
+    root: ROOT,
     rewriteRequestPath: (path) => path.replace(/^\/file/, ""),
   }),
 );
+
+// OpenSCAD compilation API
+app.post("/api/compile", async (c) => {
+  try {
+    const { entry } = await c.req.json();
+    if (!entry) {
+      return c.json({ error: "Entry file required" }, 400);
+    }
+
+    console.log(`Compiling OpenSCAD entry: ${entry}`);
+
+    const result = await compiler.compile({
+      entry,
+      rootPath: ROOT,
+      openscadVersion: RESOLVED_OPENSCAD_VERSION,
+    });
+
+    if (result.success && result.stl) {
+      // Store the result with a unique key
+      const resultKey = `${entry}_${Date.now()}`;
+      compiledResults.set(resultKey, {
+        stl: result.stl,
+        timestamp: Date.now(),
+        duration: result.duration,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+
+      // Clean up old results (keep only last 10)
+      const keys = Array.from(compiledResults.keys()).sort();
+      while (keys.length > 10) {
+        compiledResults.delete(keys.shift()!);
+      }
+
+      console.log(
+        `Compilation successful in ${result.duration}ms, STL size: ${result.stl.length} bytes`,
+      );
+
+      return c.json({
+        success: true,
+        resultKey,
+        duration: result.duration,
+        stlSize: result.stl.length,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+    } else {
+      console.log(`Compilation failed: ${result.error}`);
+      return c.json({
+        success: false,
+        error: result.error,
+        duration: result.duration,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+    }
+  } catch (error) {
+    console.error("Compilation error:", error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, 500);
+  }
+});
+
+// STL download API
+app.get("/api/stl/:resultKey", (c) => {
+  const resultKey = c.req.param("resultKey");
+  const result = compiledResults.get(resultKey);
+
+  if (!result) {
+    return c.json({ error: "STL result not found or expired" }, 404);
+  }
+
+  return c.body(result.stl.buffer as ArrayBuffer, 200, {
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="model.stl"`,
+  });
+});
 
 app.get("/main.js", async (c) => {
   try {
@@ -259,6 +332,60 @@ app.get("/events", (c) =>
       data: JSON.stringify({}),
     });
 
+    // Get entry parameter for compilation
+    const url = new URL(c.req.url);
+    const entry = url.searchParams.get("entry") || "main.scad";
+
+    // Initial compilation
+    try {
+      const result = await compiler.compile({
+        entry,
+        rootPath: ROOT,
+        openscadVersion: RESOLVED_OPENSCAD_VERSION,
+      });
+
+      await stream.writeSSE({
+        event: "compile",
+        data: JSON.stringify({
+          success: result.success,
+          duration: result.duration,
+          stlSize: result.stl?.length || 0,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          error: result.error,
+          timestamp: Date.now(),
+        }),
+      });
+
+      if (result.success && result.stl) {
+        const resultKey = `${entry}_${Date.now()}`;
+        compiledResults.set(resultKey, {
+          stl: result.stl,
+          timestamp: Date.now(),
+          duration: result.duration,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        });
+
+        await stream.writeSSE({
+          event: "stl",
+          data: JSON.stringify({
+            resultKey,
+            size: result.stl.length,
+          }),
+        });
+      }
+    } catch (error) {
+      await stream.writeSSE({
+        event: "compile",
+        data: JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: Date.now(),
+        }),
+      });
+    }
+
     // ファイル監視をこのストリーム内で開始
     const debounce = new Map<string, number>();
 
@@ -271,6 +398,10 @@ app.get("/events", (c) =>
           const rel = p.startsWith(ROOT)
             ? p.substring(ROOT.length + 1).replaceAll("\\", "/")
             : p;
+
+          // Only watch .scad files
+          if (!rel.endsWith(".scad")) continue;
+
           const key = `${kind}:${rel}`;
 
           clearTimeout(debounce.get(key));
@@ -278,14 +409,73 @@ app.get("/events", (c) =>
             key,
             setTimeout(async () => {
               try {
+                // Send file change notification
                 await stream.writeSSE({
                   event: "change",
                   data: JSON.stringify({ path: rel, kind }),
                 });
+
+                // Trigger recompilation after file change
+                if (kind === "modify" || kind === "create") {
+                  console.log(`File changed: ${rel}, recompiling...`);
+
+                  try {
+                    const result = await compiler.compile({
+                      entry,
+                      rootPath: ROOT,
+                      openscadVersion: RESOLVED_OPENSCAD_VERSION,
+                    });
+
+                    await stream.writeSSE({
+                      event: "compile",
+                      data: JSON.stringify({
+                        success: result.success,
+                        duration: result.duration,
+                        stlSize: result.stl?.length || 0,
+                        stdout: result.stdout,
+                        stderr: result.stderr,
+                        error: result.error,
+                        timestamp: Date.now(),
+                        trigger: `File ${kind}: ${rel}`,
+                      }),
+                    });
+
+                    if (result.success && result.stl) {
+                      const resultKey = `${entry}_${Date.now()}`;
+                      compiledResults.set(resultKey, {
+                        stl: result.stl,
+                        timestamp: Date.now(),
+                        duration: result.duration,
+                        stdout: result.stdout,
+                        stderr: result.stderr,
+                      });
+
+                      await stream.writeSSE({
+                        event: "stl",
+                        data: JSON.stringify({
+                          resultKey,
+                          size: result.stl.length,
+                        }),
+                      });
+                    }
+                  } catch (compileError) {
+                    await stream.writeSSE({
+                      event: "compile",
+                      data: JSON.stringify({
+                        success: false,
+                        error: compileError instanceof Error
+                          ? compileError.message
+                          : String(compileError),
+                        timestamp: Date.now(),
+                        trigger: `File ${kind}: ${rel}`,
+                      }),
+                    });
+                  }
+                }
               } catch (error) {
                 console.error("Failed to send SSE event:", error);
               }
-            }, 30) as unknown as number,
+            }, 300) as unknown as number, // Increased debounce to 300ms for compilation
           );
         }
       }
