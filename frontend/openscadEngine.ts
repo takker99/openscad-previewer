@@ -30,8 +30,7 @@ export class OpenScadEngine {
 
       try {
         // ES6モジュールとして動的にインポート
-        const openscadModule = await import(/* @vite-ignore */ jsUrl);
-        const OpenSCAD = openscadModule.default;
+        const { default: OpenSCAD } = await import(jsUrl);
 
         if (typeof OpenSCAD !== "function") {
           throw new Error("OpenSCAD default export is not a function");
@@ -142,7 +141,12 @@ export class OpenScadEngine {
       }
 
       console.log(`Attempting to compile: ${entryPath}`);
-      const code = this.mod!.callMain(["-o", this.outFile, entryPath]);
+      const code = this.mod!.callMain([
+        entryPath,
+        "--enable=manifold",
+        "-o",
+        this.outFile,
+      ]);
       const timeMs = performance.now() - start;
       const errTxt = this.stderr.join("\n").trim();
       if (code !== 0 || errTxt) {

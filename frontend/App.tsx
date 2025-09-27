@@ -43,6 +43,7 @@ export function App({ entry }: AppProps) {
         statusRef.current.className = "err";
         statusRef.current.textContent = "Error";
       }
+      console.error("OpenSCAD Error:", res.errors);
       setTimeMs(res.timeMs);
       setError(res.errors.join("\n"));
       setStlData(undefined);
@@ -80,47 +81,66 @@ export function App({ entry }: AppProps) {
   }, [serverUrl, entry, engine]);
 
   return (
-    <div style={{display: "flex", flexDirection: "column", height: "100vh", width: "100vw"}}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        width: "100vw",
+      }}
+    >
       <header>
         <strong>OpenSCAD Preview</strong>
-        <span style={{color: "#aaa", marginLeft: "10px"}}>Entry: {entry}</span>
-        <span ref={statusRef} className="warn" style={{marginLeft: "10px"}}>Idle</span>
+        <span style={{ color: "#aaa", marginLeft: "10px" }}>
+          Entry: {entry}
+        </span>
+        <span ref={statusRef} className="warn" style={{ marginLeft: "10px" }}>
+          Idle
+        </span>
         {timeMs !== undefined && (
-          <span style={{color: "#aaa", marginLeft: "10px"}}>
+          <span style={{ color: "#aaa", marginLeft: "10px" }}>
             {Math.round(timeMs)} ms
           </span>
         )}
       </header>
-      <div style={{flex: 1, minHeight: 0}}>
-        {isClient ? (
-          <React.Suspense fallback={
-            <div style={{ 
-              width: "100%", 
-              height: "100%", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center", 
-              background: "#1a1a1a", 
-              color: "#aaa" 
-            }}>
-              Loading 3D Viewer...
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {isClient
+          ? (
+            <React.Suspense
+              fallback={
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#1a1a1a",
+                    color: "#aaa",
+                  }}
+                >
+                  Loading 3D Viewer...
+                </div>
+              }
+            >
+              <StlCanvas stlData={stlData} error={error} />
+            </React.Suspense>
+          )
+          : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#1a1a1a",
+                color: "#aaa",
+              }}
+            >
+              Loading OpenSCAD Preview...
             </div>
-          }>
-            <StlCanvas stlData={stlData} error={error} />
-          </React.Suspense>
-        ) : (
-          <div style={{ 
-            width: "100%", 
-            height: "100%", 
-            display: "flex", 
-            alignItems: "center", 
-            justifyContent: "center", 
-            background: "#1a1a1a", 
-            color: "#aaa" 
-          }}>
-            Loading OpenSCAD Preview...
-          </div>
-        )}
+          )}
       </div>
     </div>
   );
