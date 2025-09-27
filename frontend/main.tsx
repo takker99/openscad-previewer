@@ -17,8 +17,18 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+/*
+ * OpenSCAD Previewer - Main Entry Point (Server-side compilation)
+ * Copyright (C) 2025 takker
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ */
+
 import { createRoot } from "react-dom/client";
-import { App } from "./App.tsx";
+import { ServerApp } from "./ServerApp.tsx";
 
 // サーバーサイドからのpropsを取得
 const propsElement = document.getElementById("app-props");
@@ -31,4 +41,4 @@ const container = document.getElementById("app")!;
 // Clear existing content and render
 container.innerHTML = "";
 const root = createRoot(container);
-root.render(<App entry={entry} />);
+root.render(<ServerApp entry={entry} />);
