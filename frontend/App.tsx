@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChangeStream, type FileChange } from "./changeStream.ts";
 import { OpenScadEngine } from "./openscadEngine.ts";
-import { StlViewer } from "./stlViewer.ts";
+import { StlCanvas } from "./StlCanvas.tsx";
 
 interface AppProps {
   entry: string;
@@ -11,13 +11,17 @@ const serverUrl = new URL(location.pathname, location.href).href.slice(0, -1);
 
 export function App({ entry }: AppProps) {
   const statusRef = useRef<HTMLSpanElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [timeMs, setTimeMs] = useState<number | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [stlData, setStlData] = useState<Uint8Array | undefined>(undefined);
+  const [isClient, setIsClient] = useState(false);
 
   const engine = useMemo(() => new OpenScadEngine(), []);
 
-  const viewer = useMemo(() => new StlViewer(), []);
+  // Detect client-side rendering
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const compile = () => {
     setError(undefined);
@@ -32,22 +36,22 @@ export function App({ entry }: AppProps) {
         statusRef.current.textContent = "OK";
       }
       setTimeMs(res.timeMs);
-      viewer.render(res.stl);
+      setStlData(res.stl);
+      setError(undefined);
     } else {
       if (statusRef.current) {
         statusRef.current.className = "err";
         statusRef.current.textContent = "Error";
       }
+      console.error("OpenSCAD Error:", res.errors);
       setTimeMs(res.timeMs);
-      viewer.showError(res.errors.join("\n"));
       setError(res.errors.join("\n"));
+      setStlData(undefined);
     }
   };
 
   useEffect(() => {
     (async () => {
-      if (!containerRef.current) return;
-      viewer.mount(containerRef.current);
       await engine.init();
       await engine.hydrateScadFiles(serverUrl, serverUrl);
       compile();
@@ -72,29 +76,72 @@ export function App({ entry }: AppProps) {
       return () => {
         off();
         cs.stop();
-        viewer.unmount();
       };
     })();
   }, [serverUrl, entry, engine]);
 
   return (
-    <div style="display:flex;flex-direction:column;height:100vh;width:100vw;">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        width: "100vw",
+      }}
+    >
       <header>
         <strong>OpenSCAD Preview</strong>
-        <span style="color:#aaa;margin-left:10px">Entry: {entry}</span>
-        <span ref={statusRef} class="warn" style="margin-left:10px">Idle</span>
+        <span style={{ color: "#aaa", marginLeft: "10px" }}>
+          Entry: {entry}
+        </span>
+        <span ref={statusRef} className="warn" style={{ marginLeft: "10px" }}>
+          Idle
+        </span>
         {timeMs !== undefined && (
-          <span style="color:#aaa;margin-left:10px">
+          <span style={{ color: "#aaa", marginLeft: "10px" }}>
             {Math.round(timeMs)} ms
           </span>
         )}
       </header>
-      <div ref={containerRef} style="flex:1; min-height:0;"></div>
-      {error && (
-        <pre style="max-height:30vh;overflow:auto;margin:0;padding:8px;border-top:1px solid #222;background:#111;color:#ef4444;">
-          {error}
-        </pre>
-      )}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {isClient
+          ? (
+            <React.Suspense
+              fallback={
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#1a1a1a",
+                    color: "#aaa",
+                  }}
+                >
+                  Loading 3D Viewer...
+                </div>
+              }
+            >
+              <StlCanvas stlData={stlData} error={error} />
+            </React.Suspense>
+          )
+          : (
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#1a1a1a",
+                color: "#aaa",
+              }}
+            >
+              Loading OpenSCAD Preview...
+            </div>
+          )}
+      </div>
     </div>
   );
 }

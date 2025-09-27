@@ -1,33 +1,34 @@
 {
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "lib": [
       "esnext",
       "dom",
       "dom.asynciterable",
       "deno.ns"
-    ],
-    "jsx": "react-jsx",
-    "jsxImportSource": "preact",
-    "types": ["vite/client"]
+    ]
   },
+  "exports": "./server.tsx",
   "imports": {
-    "@hono/vite-build": "npm:@hono/vite-build@^1.7.0",
-    "preact-render-to-string": "npm:preact-render-to-string@^6.6.1",
-    "vite": "npm:vite@^4.4.9",
-    "@preact/preset-vite": "npm:@preact/preset-vite@^2.5.0",
-    "preact": "npm:preact@^10.17.1",
-    "three": "npm:three@^0.157.0",
-    "three-stdlib": "npm:three-stdlib@^2.26.4",
-    "@types/three": "npm:@types/three@^0.157.0",
+    "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.0",
+    "@react-three/drei": "npm:@react-three/drei@^9.88.0",
+    "@react-three/fiber": "npm:@react-three/fiber@^8.15.0",
+    "@takker/openscad-previewer": "./server.tsx",
+    "@types/react": "npm:@types/react@^18.2.0",
+    "@types/react-dom": "npm:@types/react-dom@^18.2.0",
+    "@types/three": "npm:@types/three@^0.160.0",
+    "esbuild": "npm:esbuild@^0.25.10",
     "hono": "npm:hono@^4.6.3",
-    "@hono/vite-dev-server": "npm:@hono/vite-dev-server@^0.18.1"
+    "react": "npm:react@^18.2.0",
+    "react-dom": "npm:react-dom@^18.2.0",
+    "three": "npm:three@^0.160.0",
+    "three-stdlib": "npm:three-stdlib@^2.26.4"
   },
-  "nodeModulesDir": "auto",
+  "name": "@takker/openscad-previewer",
   "tasks": {
-    "dev": "deno run -A npm:vite",
-    "fix": "deno fmt && deno lint --fix && deno check **/*.ts **/*.tsx",
-    "build": "deno run -A npm:vite build --mode client && deno run -A npm:vite build",
-    "preview": "deno run -A npm:vite preview"
+    "dev": "deno serve --watch -A server.tsx",
+    "fix": "deno fmt && deno lint --fix && deno check **/*.ts **/*.tsx"
   },
-  "exclude": ["node_modules"]
+  "version": "0.0.0"
 }
