@@ -1,10 +1,28 @@
 /*
- * OpenSCAD WASM Type Definitions
+ * OpenSCAD Previewer - OpenSCAD WASM Type Definitions
+ * Copyright (C) 2025 takker
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
  * Based on Emscripten Module interface for OpenSCAD
  *
  * Note: This file contains type definitions for the OpenSCAD WebAssembly build.
- * The actual OpenSCAD WASM binaries are NOT included in this repository to avoid
- * GPL distribution obligations.
+ * The actual OpenSCAD WASM binaries are NOT included in this repository but are
+ * downloaded from the openscad-wasm project which is licensed under GPL v2.
+ * Since this project uses openscad-wasm, it must also be licensed under GPL v2
+ * to comply with the copyleft requirements.
  */
 
 interface FSWriteOptions {
