@@ -15,6 +15,7 @@ import type { EmscriptenModule } from "../frontend/openscad-wasm.d.ts";
 export interface CompileRequest {
   entry: string;
   files: Array<{ path: string; content: string }>;
+  openscadVersion: string;
 }
 
 export interface CompileResult {
@@ -26,12 +27,14 @@ export interface CompileResult {
   error?: string;
 }
 
-export class OpenSCADEngine {
-  private baseUrl: string;
+// Cache for WASM files to avoid re-fetching
+const wasmCache = new Map<
+  string,
+  (options?: Partial<EmscriptenModule>) => Promise<EmscriptenModule>
+>();
 
-  constructor(baseUrl = "http://localhost:8000/openscad") {
-    this.baseUrl = baseUrl;
-  }
+export class OpenSCADEngine {
+  constructor() {}
 
   async compile(request: CompileRequest): Promise<CompileResult> {
     const start = Date.now();
@@ -39,8 +42,12 @@ export class OpenSCADEngine {
     const stderr: string[] = [];
 
     try {
-      // Create fresh WASM instance for each compilation
-      const instance = await this.createInstance(stdout, stderr);
+      // Create fresh WASM instance for each compilation (with cached files)
+      const instance = await this.createInstance(
+        stdout,
+        stderr,
+        request.openscadVersion,
+      );
 
       // Write all files to WASM filesystem
       this.writeFiles(instance, request.files);
@@ -107,19 +114,18 @@ export class OpenSCADEngine {
   private async createInstance(
     stdout: string[],
     stderr: string[],
+    version: string,
   ): Promise<EmscriptenModule> {
-    const jsUrl = `${this.baseUrl.replace(/\/+$/, "")}/openscad.js`;
-
     try {
-      // Dynamic import of OpenSCAD WASM
-      const { default: OpenSCAD } = await import(jsUrl);
+      // Get or fetch OpenSCAD factory function
+      const OpenSCADFactory = await this.getOpenSCADFactory(version);
 
-      if (typeof OpenSCAD !== "function") {
-        throw new Error("OpenSCAD default export is not a function");
+      if (typeof OpenSCADFactory !== "function") {
+        throw new Error("OpenSCAD factory is not a function");
       }
 
-      // Create fresh instance
-      const instance = await OpenSCAD({
+      // Create fresh instance (reusing cached factory)
+      const instance = await OpenSCADFactory({
         noInitialRun: true,
         print: (...args: string[]) => stdout.push(args.join(" ")),
         printErr: (...args: string[]) => stderr.push(args.join(" ")),
@@ -132,6 +138,38 @@ export class OpenSCADEngine {
       return instance;
     } catch (error) {
       throw new Error(`Failed to create OpenSCAD instance: ${error}`);
+    }
+  }
+
+  private async getOpenSCADFactory(
+    version: string,
+  ): Promise<
+    (options?: Partial<EmscriptenModule>) => Promise<EmscriptenModule>
+  > {
+    const cacheKey = `openscad-${version}`;
+
+    // Return cached factory if available
+    if (wasmCache.has(cacheKey)) {
+      const cached = wasmCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    // Fetch and cache the OpenSCAD factory
+    const jsUrl =
+      `https://github.com/openscad/openscad-wasm/releases/download/${version}/openscad.js`;
+
+    try {
+      // Use dynamic import to load the module
+      const { default: OpenSCADFactory } = await import(jsUrl);
+
+      // Cache the factory for reuse
+      wasmCache.set(cacheKey, OpenSCADFactory);
+
+      return OpenSCADFactory;
+    } catch (error) {
+      throw new Error(`Failed to fetch OpenSCAD WASM from ${jsUrl}: ${error}`);
     }
   }
 

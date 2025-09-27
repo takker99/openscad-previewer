@@ -28,7 +28,7 @@
  */
 
 import { createRoot } from "react-dom/client";
-import { ServerApp } from "./ServerApp.tsx";
+import { App } from "./App.tsx";
 
 // サーバーサイドからのpropsを取得
 const propsElement = document.getElementById("app-props");
@@ -41,4 +41,4 @@ const container = document.getElementById("app")!;
 // Clear existing content and render
 container.innerHTML = "";
 const root = createRoot(container);
-root.render(<ServerApp entry={entry} />);
+root.render(<App entry={entry} />);

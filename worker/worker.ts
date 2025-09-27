@@ -29,6 +29,7 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
         const result = await engine.compile({
           entry: message.entry,
           files: message.files,
+          openscadVersion: message.openscadVersion,
         });
 
         response = {

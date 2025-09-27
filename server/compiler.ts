@@ -17,6 +17,7 @@ import {
 export interface CompileOptions {
   entry: string;
   rootPath: string;
+  openscadVersion: string;
 }
 
 export interface CompileResult {
@@ -123,6 +124,7 @@ export class OpenSCADCompiler {
       id: requestId,
       entry: options.entry,
       files,
+      openscadVersion: options.openscadVersion,
     };
 
     return new Promise((resolve, reject) => {

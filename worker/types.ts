@@ -20,6 +20,7 @@ export interface CompileRequest {
   id: string;
   entry: string;
   files: Array<{ path: string; content: string }>;
+  openscadVersion: string;
 }
 
 export interface FileSystemRequest {

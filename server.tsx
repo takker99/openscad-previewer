@@ -20,7 +20,6 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/deno";
-import { proxy } from "hono/proxy";
 import { streamSSE } from "hono/streaming";
 import { renderToString } from "react-dom/server";
 import { build } from "esbuild";
@@ -66,6 +65,9 @@ Examples:
 
 const { root: ROOT_RAW, version: OPENSCAD_VERSION } = parseArgs();
 const ROOT = await Deno.realPath(ROOT_RAW);
+
+// Get the resolved OpenSCAD version
+const RESOLVED_OPENSCAD_VERSION = await getOpenSCADVersion(OPENSCAD_VERSION);
 
 // Initialize compiler
 const compiler = new OpenSCADCompiler();
@@ -174,28 +176,6 @@ app.get("/", (c) => {
   }
 });
 
-// OpenSCAD WASM ファイルプロキシ
-app.get("/openscad/:path{.+}", async (c) => {
-  const tag = await getOpenSCADVersion(OPENSCAD_VERSION);
-  const path = c.req.param("path");
-  const contentType = path.endsWith(".wasm")
-    ? "application/wasm"
-    : path.endsWith(".js")
-    ? "text/javascript"
-    : "application/octet-stream";
-  const res = await proxy(
-    `https://github.com/openscad/openscad-wasm/releases/download/${tag}/${
-      c.req.param("path")
-    }`,
-    {
-      headers: c.req.header(),
-    },
-  );
-  res.headers.delete("Set-Cookie");
-  res.headers.set("Content-Type", contentType);
-  return res;
-});
-
 // ファイル一覧（初期同期用）
 app.get("/list", async (c) => {
   const extFilter = (c.req.query("ext") ?? "").split(",").map((s) =>
@@ -250,6 +230,7 @@ app.post("/api/compile", async (c) => {
     const result = await compiler.compile({
       entry,
       rootPath: ROOT,
+      openscadVersion: RESOLVED_OPENSCAD_VERSION,
     });
 
     if (result.success && result.stl) {
@@ -360,6 +341,7 @@ app.get("/events", (c) =>
       const result = await compiler.compile({
         entry,
         rootPath: ROOT,
+        openscadVersion: RESOLVED_OPENSCAD_VERSION,
       });
 
       await stream.writeSSE({
@@ -441,6 +423,7 @@ app.get("/events", (c) =>
                     const result = await compiler.compile({
                       entry,
                       rootPath: ROOT,
+                      openscadVersion: RESOLVED_OPENSCAD_VERSION,
                     });
 
                     await stream.writeSSE({
