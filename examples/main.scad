@@ -1,10 +1,10 @@
-// Simple test cube - hot reload test
-cube([40, 40, 40]);
+// Simple test cube
+cube([20, 20, 20]);
 
 // Add a sphere
-translate([50, 0, 0])
-    sphere(r=20);
+translate([30, 0, 0])
+    sphere(r=10);
 
 // Add a cylinder
-translate([0, 50, 0])
-    cylinder(h=40, r=18);
+translate([0, 30, 0])
+    cylinder(h=20, r=8);
